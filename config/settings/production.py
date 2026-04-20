@@ -2,15 +2,51 @@ from .base import *
 from decouple import config
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
+from urllib.parse import urlparse
 
 DEBUG = False
+
+
+def _normalize_host(value: str) -> str:
+    value = value.strip().lower()
+    if not value:
+        return ""
+
+    if "://" in value:
+        value = urlparse(value).netloc
+    else:
+        value = value.split("/", 1)[0]
+
+    if "@" in value:
+        value = value.split("@", 1)[1]
+    if ":" in value:
+        value = value.split(":", 1)[0]
+    return value.strip()
+
+
+def _normalize_origin(value: str) -> str:
+    value = value.strip().lower()
+    if not value:
+        return ""
+
+    candidate = value if "://" in value else f"https://{value}"
+    parsed = urlparse(candidate)
+    if not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 raw_allowed_hosts = config("ALLOWED_HOSTS", default="")
 railway_public_domain = config("RAILWAY_PUBLIC_DOMAIN", default="")
 
-ALLOWED_HOSTS = [host.strip() for host in raw_allowed_hosts.split(",") if host.strip()]
-if railway_public_domain and railway_public_domain not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(railway_public_domain)
+ALLOWED_HOSTS = [
+    host
+    for host in (_normalize_host(raw_host) for raw_host in raw_allowed_hosts.split(","))
+    if host
+]
+
+normalized_railway_domain = _normalize_host(railway_public_domain)
+if normalized_railway_domain and normalized_railway_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(normalized_railway_domain)
 
 if not ALLOWED_HOSTS:
     raise ImproperlyConfigured(
@@ -19,12 +55,15 @@ if not ALLOWED_HOSTS:
 
 raw_csrf_trusted_origins = config("CSRF_TRUSTED_ORIGINS", default="")
 CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in raw_csrf_trusted_origins.split(",")
-    if origin.strip()
+    origin
+    for origin in (
+        _normalize_origin(raw_origin)
+        for raw_origin in raw_csrf_trusted_origins.split(",")
+    )
+    if origin
 ]
-if railway_public_domain:
-    railway_origin = f"https://{railway_public_domain}"
+if normalized_railway_domain:
+    railway_origin = _normalize_origin(normalized_railway_domain)
     if railway_origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(railway_origin)
 
