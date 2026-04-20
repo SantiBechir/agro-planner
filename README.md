@@ -27,12 +27,14 @@ El endpoint `GET /` debe devolver `OK`.
 
 ## Variables de entorno
 
-| Variable | Descripción | Ejemplo |
-|---|---|---|
-| `SECRET_KEY` | Clave secreta de Django | `django-insecure-...` |
-| `DATABASE_URL` | URL de conexión a PostgreSQL | `postgres://user:pass@host:5432/db` |
-| `DEBUG` | Modo debug | `True` / `False` |
-| `ALLOWED_HOSTS` | Hosts permitidos (separados por coma) | `localhost,mi-app.railway.app` |
+| Variable                | Descripción                                         | Ejemplo                             |
+| ----------------------- | --------------------------------------------------- | ----------------------------------- |
+| `SECRET_KEY`            | Clave secreta de Django                             | `django-insecure-...`               |
+| `DATABASE_URL`          | URL de conexión a PostgreSQL                        | `postgres://user:pass@host:5432/db` |
+| `DEBUG`                 | Modo debug                                          | `True` / `False`                    |
+| `ALLOWED_HOSTS`         | Hosts permitidos (separados por coma)               | `localhost,mi-app.up.railway.app`   |
+| `RAILWAY_PUBLIC_DOMAIN` | Dominio público que Railway asigna al servicio      | `mi-app.up.railway.app`             |
+| `CSRF_TRUSTED_ORIGINS`  | Orígenes https confiables para CSRF (coma separada) | `https://mi-app.up.railway.app`     |
 
 En desarrollo, si no configurás `DATABASE_URL`, usa SQLite automáticamente.
 
@@ -48,6 +50,8 @@ En desarrollo, si no configurás `DATABASE_URL`, usa SQLite automáticamente.
    - `DATABASE_URL` — Railway la completa automáticamente si usás el plugin de Postgres
    - `DEBUG` — `False`
    - `ALLOWED_HOSTS` — tu dominio en Railway, ej: `mi-app.up.railway.app`
+   - `RAILWAY_PUBLIC_DOMAIN` — Railway suele exponerla automáticamente, pero podés setearla manualmente si hace falta
+   - `CSRF_TRUSTED_ORIGINS` — opcional si usás `RAILWAY_PUBLIC_DOMAIN`; si no, agregá `https://tu-dominio`
    - `DJANGO_SETTINGS_MODULE` — `config.settings.production`
 5. Railway detecta el `Procfile` y corre `gunicorn config.wsgi`
 

@@ -1,9 +1,15 @@
 from pathlib import Path
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = config("SECRET_KEY")
+SECRET_KEY = config("SECRET_KEY", default="")
+
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "Missing SECRET_KEY environment variable. Configure it in Railway Variables."
+    )
 
 INSTALLED_APPS = [
     "django.contrib.admin",
