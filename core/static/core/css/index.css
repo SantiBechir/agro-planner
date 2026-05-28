@@ -1,0 +1,61 @@
+/* Página completa */
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+
+    background-image: url('/static/core/imagen/fondo.png');
+    background-size: cover;
+    background-position: center;
+
+    height: 100vh;
+}
+
+/* Barra superior */
+.navbar {
+    background-color: #4d8b4f;
+
+    color: white;
+
+    padding: 15px 30px;
+
+    display: flex;
+    align-items: center;
+
+    gap: 15px;
+}
+
+/* Logo */
+.navbar img {
+    width: 50px;
+    height: 50px;
+
+    border-radius: 10px;
+}
+
+/* Texto */
+.navbar h2 {
+    margin: 0;
+
+    font-size: 30px;
+
+    font-weight: bold;
+}
+
+/* Contenedor */
+.container {
+    padding: 50px;
+}
+
+/* Card */
+.card {
+    background-color: white;
+
+    width: 400px;
+
+    padding: 30px;
+
+    border-radius: 15px;
+
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.2);
+}
+

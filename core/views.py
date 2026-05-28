@@ -1,5 +1,8 @@
-from django.http import HttpResponse
+from django.shortcuts import render
 
 
-def health_check(request):
-    return HttpResponse("OK")
+def home(request):
+    return render(request, "core/index.html")
+
+def login_view(request):
+    return render(request, "core/login.html")
