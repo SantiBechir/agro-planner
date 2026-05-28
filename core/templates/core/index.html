@@ -1,38 +1,218 @@
-<!DOCTYPE html>
-<html lang="es">
+{% extends "core/base.html" %}
+{% load static %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% block title %}Panel de Control - AgroPlanner{% endblock %}
 
-    <title>AgroPlanner</title>
+{% block content %}
+<div x-data="{ sidebarOpen: false, activeTab: 'dashboard' }" class="flex h-screen overflow-hidden">
+    <!-- Sidebar para móvil -->
+    <div x-show="sidebarOpen" class="fixed inset-0 z-40 flex md:hidden" role="dialog" aria-modal="true" style="display: none;">
+        <div x-show="sidebarOpen" x-transition:enter="transition-opacity ease-linear duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity ease-linear duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" aria-hidden="true"></div>
 
-    <link rel="stylesheet" href="/static/core/css/index.css">
-</head>
-
-<body>
-
-    <!-- Contenido -->
-<div class="navbar">
-
-    <img src="/static/core/imagen/logoUTN.png" alt="Logo">
-
-    <h2>AgroPlanner</h2>
-
-</div>
-
-</body>
-
-
-    <!-- Contenido -->
-    <div class="container">
-
-        <!-- Card -->
-        <div class="card">
-            <h2>Agregar lotes</h2>
+        <div x-show="sidebarOpen" x-transition:enter="transition ease-in-out duration-300 transform" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition ease-in-out duration-300 transform" x-transition:leave-start="translate-x-0" x-transition:leave-end="-translate-x-full" class="relative flex w-full max-w-xs flex-1 flex-col bg-[#1d4c22] pt-5 pb-4">
+            <div class="absolute top-0 right-0 -mr-12 pt-2">
+                <button type="button" @click="sidebarOpen = false" class="ml-1 flex h-10 w-10 items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white">
+                    <span class="sr-only">Close sidebar</span>
+                    <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <!-- Logo móvil -->
+            <div class="flex flex-shrink-0 items-center px-4 space-x-3">
+                <img src="{% static 'core/imagen/logoUTN.png' %}" alt="Logo UTN" class="h-10 w-10 object-cover rounded-lg border border-white/20">
+                <span class="text-xl font-bold tracking-tight text-white">AgroPlanner</span>
+            </div>
+            <!-- Navigation móvil -->
+            <div class="mt-8 h-0 flex-1 overflow-y-auto">
+                <nav class="space-y-1.5 px-2">
+                    <a href="{% url 'home' %}" @click="activeTab = 'dashboard'; sidebarOpen = false" class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150" :class="activeTab === 'dashboard' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'">
+                        Dashboard
+                    </a>
+                </nav>
+            </div>
         </div>
-
     </div>
 
-</body>
-</html>
+    <!-- Sidebar Escritorio (Rich Forest Green #1d4c22) -->
+    <div class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 z-20">
+        <div class="flex flex-col flex-grow bg-[#1d4c22] pt-5 overflow-y-auto shadow-2xl border-r border-emerald-950/20">
+            <!-- Logo -->
+            <div class="flex items-center flex-shrink-0 px-6 space-x-3">
+                <img src="{% static 'core/imagen/logoUTN.png' %}" alt="Logo UTN" 
+                     class="h-10 w-10 object-cover rounded-xl shadow-md border border-white/20">
+                <span class="text-xl font-extrabold tracking-tight text-white drop-shadow-sm">AgroPlanner</span>
+            </div>
+
+            <!-- Menú -->
+            <div class="mt-8 flex flex-col flex-1 px-4">
+                <nav class="flex-1 space-y-1.5 pb-4">
+                    <!-- Dashboard -->
+                    <a href="{% url 'home' %}" 
+                       @click="activeTab = 'dashboard'"
+                       class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200"
+                       :class="activeTab === 'dashboard' ? 'bg-white/15 text-white border border-white/10 shadow-inner' : 'text-emerald-100 hover:bg-white/5 hover:text-white'">
+                        <svg class="mr-3 h-5 w-5" :class="activeTab === 'dashboard' ? 'text-white' : 'text-emerald-200 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
+                        </svg>
+                        Dashboard
+                    </a>
+
+                    <!-- Lotes -->
+                    <a href="#" 
+                       hx-get="{% url 'lote_list' %}"
+                       hx-target="#main-content"
+                       @click="activeTab = 'lotes'"
+                       class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200"
+                       :class="activeTab === 'lotes' ? 'bg-white/15 text-white border border-white/10 shadow-inner' : 'text-emerald-100 hover:bg-white/5 hover:text-white'">
+                        <svg class="mr-3 h-5 w-5" :class="activeTab === 'lotes' ? 'text-white' : 'text-emerald-200 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Lotes
+                    </a>
+
+                    <!-- Cultivos -->
+                    <a href="#" 
+                       hx-get="{% url 'cultivo_list' %}"
+                       hx-target="#main-content"
+                       @click="activeTab = 'cultivos'"
+                       class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200"
+                       :class="activeTab === 'cultivos' ? 'bg-white/15 text-white border border-white/10 shadow-inner' : 'text-emerald-100 hover:bg-white/5 hover:text-white'">
+                        <svg class="mr-3 h-5 w-5" :class="activeTab === 'cultivos' ? 'text-white' : 'text-emerald-200 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        Cultivos
+                    </a>
+
+                    <!-- Planificaciones -->
+                    <a href="#" 
+                       hx-get="{% url 'planificacion_list' %}"
+                       hx-target="#main-content"
+                       @click="activeTab = 'planificaciones'"
+                       class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200"
+                       :class="activeTab === 'planificaciones' ? 'bg-white/15 text-white border border-white/10 shadow-inner' : 'text-emerald-100 hover:bg-white/5 hover:text-white'">
+                        <svg class="mr-3 h-5 w-5" :class="activeTab === 'planificaciones' ? 'text-white' : 'text-emerald-200 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                        </svg>
+                        Planificaciones
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Perfil / Logout -->
+            <div class="flex-shrink-0 flex border-t border-white/10 p-4 bg-emerald-950/20">
+                <div class="flex items-center justify-between w-full">
+                    <div class="flex items-center flex-1 min-w-0">
+                        <div class="inline-block h-9 w-9 rounded-xl bg-white/15 border border-white/10 flex items-center justify-center text-white font-bold">
+                            {{ request.user.username|make_list|first|upper }}
+                        </div>
+                        <div class="ml-3 truncate">
+                            <p class="text-sm font-bold text-white truncate">{{ request.user.username }}</p>
+                            <p class="text-[10px] text-emerald-200 tracking-wider">ADMINISTRADOR</p>
+                        </div>
+                    </div>
+                    <a href="{% url 'logout' %}" class="p-1.5 hover:bg-white/10 text-emerald-200 hover:text-white rounded-xl transition duration-150 ml-2" title="Cerrar Sesión">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenido Principal -->
+    <div class="flex flex-col flex-1 md:pl-64 h-full overflow-hidden">
+        <!-- Top bar móvil -->
+        <div class="sticky top-0 z-10 flex h-16 flex-shrink-0 bg-[#1d4c22] md:hidden shadow-md">
+            <button type="button" @click="sidebarOpen = true" class="px-4 text-emerald-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white">
+                <span class="sr-only">Open sidebar</span>
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+                </svg>
+            </button>
+            <div class="flex flex-1 justify-between px-4 items-center">
+                <span class="text-xl font-bold tracking-tight text-white">AgroPlanner</span>
+                <div class="inline-block h-8 w-8 rounded-xl bg-white/15 flex items-center justify-center text-white font-bold text-sm">
+                    {{ request.user.username|make_list|first|upper }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Área de Contenido Dinámico -->
+        <main id="main-content" class="flex-1 overflow-y-auto p-6 md:p-8 relative">
+            <!-- Dashboard Home por defecto (Cajas Blancas con Glassmorphism) -->
+            <div class="space-y-8 max-w-7xl mx-auto">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+                    <div class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit">
+                        <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">Bienvenido, {{ request.user.username }}</h1>
+                        <p class="mt-1 text-sm text-slate-600 font-medium">Control global y optimización matemática de tu campaña agrícola.</p>
+                    </div>
+                </div>
+
+                <!-- Tarjetas de métricas (Cajas Blancas) -->
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    <!-- Lotes -->
+                    <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl hover:border-[#4d8b4f]/30 transition-all duration-300 rounded-2xl p-6 flex items-center justify-between group">
+                        <div>
+                            <p class="text-xs font-bold text-slate-500 tracking-wider">LOTES REGISTRADOS</p>
+                            <p class="mt-2 text-4xl font-extrabold text-[#2f5e31] group-hover:scale-105 transition duration-300">{{ total_lotes }}</p>
+                        </div>
+                        <div class="p-4 bg-emerald-50 text-[#4d8b4f] rounded-2xl border border-emerald-100 shadow-inner">
+                            <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Cultivos -->
+                    <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl hover:border-[#4d8b4f]/30 transition-all duration-300 rounded-2xl p-6 flex items-center justify-between group">
+                        <div>
+                            <p class="text-xs font-bold text-slate-500 tracking-wider">CULTIVOS DISPONIBLES</p>
+                            <p class="mt-2 text-4xl font-extrabold text-[#2f5e31] group-hover:scale-105 transition duration-300">{{ total_cultivos }}</p>
+                        </div>
+                        <div class="p-4 bg-emerald-50 text-[#4d8b4f] rounded-2xl border border-emerald-100 shadow-inner">
+                            <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Planificaciones -->
+                    <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl hover:border-[#4d8b4f]/30 transition-all duration-300 rounded-2xl p-6 flex items-center justify-between group">
+                        <div>
+                            <p class="text-xs font-bold text-slate-500 tracking-wider">PLANIFICACIONES HECHAS</p>
+                            <p class="mt-2 text-4xl font-extrabold text-[#2f5e31] group-hover:scale-105 transition duration-300">{{ total_planificaciones }}</p>
+                        </div>
+                        <div class="p-4 bg-emerald-50 text-[#4d8b4f] rounded-2xl border border-emerald-100 shadow-inner">
+                            <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tarjeta Principal de Presentación (Blanca) -->
+                <div class="backdrop-blur-md bg-white/90 border border-emerald-500/10 rounded-2xl p-8 relative overflow-hidden shadow-xl">
+                    <div class="max-w-2xl relative z-10">
+                        <h3 class="text-2xl font-bold text-[#2f5e31] mb-3">Maximización del Margen Económico e Intensidad de Suelo</h3>
+                        <p class="text-slate-600 text-sm leading-relaxed mb-6 font-medium">
+                            Esta plataforma integra los modelos matemáticos de optimización MILP (programación lineal entera mixta) escritos en Pyomo para decidir de manera inteligente qué cultivos sembrar, en qué fechas y en qué lotes específicos, considerando las compatibilidades de suelo, los setups de siembra, rotaciones y costos variables.
+                        </p>
+                        <div class="flex flex-wrap gap-4">
+                            <button hx-get="{% url 'planificacion_list' %}" hx-target="#main-content" @click="activeTab = 'planificaciones'" class="px-5 py-3 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition-all duration-300 shadow-md shadow-emerald-700/10 transform hover:scale-[1.01]">
+                                Ir a Planificaciones
+                            </button>
+                            <button hx-get="{% url 'lote_list' %}" hx-target="#main-content" @click="activeTab = 'lotes'" class="px-5 py-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-sm transition-all duration-300">
+                                Ver Catálogo de Lotes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}

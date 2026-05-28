@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    AsignacionLoteSlot,
     Campania,
     CampaniaHistorica,
     CompatibilidadCultivoSuelo,
@@ -10,6 +11,7 @@ from .models import (
     ImpactoRotacion,
     Lote,
     NivelAntiguedad,
+    Planificacion,
     RendimientoCultivoSuelo,
     SecuenciaPermitida,
     SetupCultivo,
@@ -140,3 +142,38 @@ class HistorialLoteCultivoAdmin(admin.ModelAdmin):
     list_display = ("lote", "cultivo", "campania_historica", "presente")
     list_filter = ("campania_historica", "presente")
     search_fields = ("lote__codigo", "cultivo__codigo")
+
+
+class AsignacionInline(admin.TabularInline):
+    model = AsignacionLoteSlot
+    extra = 0
+    raw_id_fields = ("lote", "cultivo", "slot")
+
+
+@admin.register(Planificacion)
+class PlanificacionAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "fecha_creacion", "profit", "ilu", "estado")
+    list_filter = ("estado", "fecha_creacion")
+    search_fields = ("nombre",)
+    inlines = [AsignacionInline]
+
+
+@admin.register(AsignacionLoteSlot)
+class AsignacionLoteSlotAdmin(admin.ModelAdmin):
+    list_display = (
+        "planificacion",
+        "lote",
+        "cultivo",
+        "slot",
+        "dia_siembra",
+        "dia_cosecha",
+        "profit_value",
+    )
+    list_filter = ("planificacion", "lote", "cultivo", "slot")
+    search_fields = ("planificacion__nombre", "lote__codigo", "cultivo__codigo")
+
+    def profit_value(self, obj):
+        if obj.ingreso is not None and obj.costo is not None:
+            return obj.ingreso - obj.costo
+        return None
+    profit_value.short_description = "Profit estimado"
