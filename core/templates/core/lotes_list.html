@@ -1,11 +1,28 @@
-<div class="space-y-8 max-w-7xl mx-auto">
+<div class="space-y-8 max-w-7xl mx-auto" x-data="{ showModal: false }">
     <!-- Header -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit">
             <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">Lotes y Parcelas</h1>
             <p class="mt-1 text-sm text-slate-600 font-medium">Listado completo de terrenos registrados con sus superficies y limitadores de cultivo.</p>
         </div>
+        <div>
+            <button @click="showModal = true" class="px-5 py-3 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition-all duration-300 shadow-md shadow-emerald-700/10 transform hover:scale-[1.01]">
+                + Agregar Lote
+            </button>
+        </div>
     </div>
+
+    <!-- Mensajes -->
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-4 rounded-xl border {% if message.tags == 'error' %}bg-red-50 border-red-200 text-red-800{% else %}bg-emerald-50 border-emerald-200 text-[#2f5e31]{% endif %} text-sm font-semibold flex items-center justify-between">
+            <span>{{ message.message }}</span>
+            <button class="text-xs font-bold uppercase tracking-wider ml-4 text-slate-400 hover:text-slate-600 transition" onclick="this.parentElement.remove()">Cerrar</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <!-- Grid de Lotes (Light cards) -->
     <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -65,5 +82,74 @@
             <p class="mt-1 text-xs text-slate-500">Los lotes se cargarán automáticamente al importar el Excel en staging o local.</p>
         </div>
         {% endfor %}
+    </div>
+
+    <!-- Modal de Agregar Lote -->
+    <div x-show="showModal" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+        <!-- Fondo oscuro -->
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+
+        <!-- Contenedor del Modal -->
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div @click.away="showModal = false" class="relative transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-emerald-500/10">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
+                    <h3 class="text-lg font-bold text-[#2f5e31]">Agregar Nuevo Lote</h3>
+                    <button @click="showModal = false" class="text-slate-400 hover:text-slate-600 transition">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form hx-post="{% url 'lote_create' %}" hx-target="#main-content" @submit="showModal = false" class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Código del Lote</label>
+                        <input type="text" name="codigo" required placeholder="Ej: LOTE_08" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nombre (Opcional)</label>
+                        <input type="text" name="nombre" placeholder="Ej: Parcela Norte" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Superficie (ha)</label>
+                            <input type="number" step="0.01" name="superficie_ha" required placeholder="Ej: 150" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipo de Suelo</label>
+                            <select name="tipo_suelo" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                                <option value="" disabled selected>Seleccionar...</option>
+                                {% for suelo in tipos_suelo %}
+                                <option value="{{ suelo.id }}">{{ suelo.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Máx. Cultivos Principales</label>
+                            <input type="number" name="max_cultivos_principales" required placeholder="Ej: 2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Máx. Cultivos Secundarios</label>
+                            <input type="number" name="max_cultivos_secundarios" required placeholder="Ej: 1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                        <button type="button" @click="showModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="px-5 py-2 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">
+                            Guardar Lote
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
