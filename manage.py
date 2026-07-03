@@ -5,7 +5,16 @@ import sys
 
 
 def main():
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
+    if os.environ.get("RAILWAY_PUBLIC_DOMAIN"):
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.production")
+    else:
+        from pathlib import Path
+        BASE_DIR = Path(__file__).resolve().parent
+        if (BASE_DIR / "config" / "settings" / "local.py").exists():
+            os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
+        else:
+            os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
+
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
