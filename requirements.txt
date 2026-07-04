@@ -6,4 +6,5 @@ dj-database-url==2.1.0
 pandas
 openpyxl
 pyomo
+highspy
 whitenoise
