@@ -9,4 +9,6 @@ urlpatterns = [
     path("cultivos/", views.cultivo_list, name="cultivo_list"),
     path("planificaciones/", views.planificacion_list, name="planificacion_list"),
     path("planificaciones/ejecutar/", views.ejecutar_optimizacion, name="ejecutar_optimizacion"),
+    path("planificaciones/<int:pk>/estado/", views.planificacion_status, name="planificacion_status"),
+    path("planificaciones/<int:pk>/estado/partial/", views.planificacion_status_partial, name="planificacion_status_partial"),
 ]

@@ -46,28 +46,30 @@ def run_optimization(planificacion_id):
         model.max_s = pyo.Param(model.j, initialize=data["max_s"])
         model.sueloj = pyo.Param(model.j, initialize=data["sueloj"])
 
-        model.fsp = pyo.Param(model.i, model.c, initialize=data["fsp_dict"])
-        model.sc = pyo.Param(model.i, model.c, initialize=data["sc_dict"])
-        model.hc = pyo.Param(model.i, model.c, initialize=data["hc_dict"])
-        model.frc = pyo.Param(model.i, model.j, model.c, initialize=data["frc_dict"])
-        model.vr = pyo.Param(model.i, model.j, model.c, initialize=data["vr_dict"])
-        model.tf = pyo.Param(model.i, initialize=data["tf_dict"])
-        model.scp = pyo.Param(model.i, initialize=data["scp_dict"])
-        model.cp = pyo.Param(model.i, model.c, initialize=data["cp_dict"])
-        model.st = pyo.Param(model.i, initialize=data["st_dict"])
-        model.cst = pyo.Param(model.i, model.c, initialize=data["cst_dict"])
-        model.clt = pyo.Param(model.i, model.c, initialize=data["clt_dict"])
-        model.gt = pyo.Param(model.i, initialize=data["gt"])
-        model.st_start = pyo.Param(model.i, initialize=data["st_start"])
-        model.st_end = pyo.Param(model.i, initialize=data["st_end"])
+        # Costos y parámetros sparse: se usan funciones de lookup con default
+        # para evitar errores cuando una combinación no existe en la base de datos.
+        model.fsp = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["fsp_dict"].get((i, c), 0.0))
+        model.sc = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["sc_dict"].get((i, c), 0.0))
+        model.hc = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["hc_dict"].get((i, c), 0.0))
+        model.frc = pyo.Param(model.i, model.j, model.c, initialize=lambda m, i, j, c: data["frc_dict"].get((i, j, c), 0.0))
+        model.vr = pyo.Param(model.i, model.j, model.c, initialize=lambda m, i, j, c: data["vr_dict"].get((i, j, c), 0.0))
+        model.tf = pyo.Param(model.i, initialize=lambda m, i: data["tf_dict"].get(i, 0.0))
+        model.scp = pyo.Param(model.i, initialize=lambda m, i: data["scp_dict"].get(i, 0.0))
+        model.cp = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["cp_dict"].get((i, c), 0.0))
+        model.st = pyo.Param(model.i, initialize=lambda m, i: data["st_dict"].get(i, 0.0))
+        model.cst = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["cst_dict"].get((i, c), 0.0))
+        model.clt = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["clt_dict"].get((i, c), 0.0))
+        model.gt = pyo.Param(model.i, initialize=data["gt"], default=0)
+        model.st_start = pyo.Param(model.i, initialize=data["st_start"], default=0)
+        model.st_end = pyo.Param(model.i, initialize=data["st_end"], default=365)
 
-        model.setup = pyo.Param(model.i, model.i, initialize=data["setup_dict"])
-        model.ar = pyo.Param(model.i, model.i, initialize=data["ar_dict"], mutable=True)
-        model.sueloi = pyo.Param(model.i, model.s, initialize=data["sueloi_dict"])
-        model.xh = pyo.Param(model.i, model.j, model.ch, initialize=data["xh_dict"])
-        model.alfa = pyo.Param(model.l, initialize=data["alfa_dict"])
-        model.ymax = pyo.Param(model.s, model.i, initialize=data["y_max_dict"])
-        model.red = pyo.Param(model.i, model.i, initialize=data["red_dict"])
+        model.setup = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["setup_dict"].get((i1, i2), 0.0))
+        model.ar = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["ar_dict"].get((i1, i2), 1), mutable=True)
+        model.sueloi = pyo.Param(model.i, model.s, initialize=lambda m, i, s: data["sueloi_dict"].get((i, s), 1))
+        model.xh = pyo.Param(model.i, model.j, model.ch, initialize=lambda m, i, j, ch: data["xh_dict"].get((i, j, ch), 0))
+        model.alfa = pyo.Param(model.l, initialize=lambda m, l: data["alfa_dict"].get(l, 0.0))
+        model.ymax = pyo.Param(model.s, model.i, initialize=lambda m, s, i: data["y_max_dict"].get((s, i), 0.0))
+        model.red = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["red_dict"].get((i1, i2), 0.0))
         model.ord = pyo.Param(model.c, initialize=data["ord_dict"])
         model.lag = pyo.Param(model.l, initialize={'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3, 'L4': 4, 'L5': 5})
 
@@ -262,19 +264,14 @@ def run_optimization(planificacion_id):
         model.yield3 = pyo.Constraint(model.i, model.j, model.t, rule=yield3)
 
         # ---- SOLVER ----
-        try:
-            opt = pyo.SolverFactory('appsi_highs')
-            time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
-            if time_limit_raw:
-                opt.config.time_limit = int(time_limit_raw)
-            mip_gap_raw = config('SOLVER_MIP_GAP', default='')
-            if mip_gap_raw:
-                opt.config.mip_gap = float(mip_gap_raw)
-            results = opt.solve(model, tee=False)
-        except Exception:
-            # Fallback a GLPK
-            opt = pyo.SolverFactory('glpk')
-            results = opt.solve(model, tee=False)
+        opt = pyo.SolverFactory('appsi_highs')
+        time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
+        if time_limit_raw:
+            opt.config.time_limit = int(time_limit_raw)
+        mip_gap_raw = config('SOLVER_MIP_GAP', default='')
+        if mip_gap_raw:
+            opt.config.mip_gap = float(mip_gap_raw)
+        results = opt.solve(model, tee=False)
 
         # 3. Guardar resultados
         if results.solver.status == pyo.SolverStatus.ok and results.solver.termination_condition == pyo.TerminationCondition.optimal:
