@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -11,40 +11,9 @@ from core.models import (
     RendimientoCultivoSuelo,
     CompatibilidadCultivoSuelo,
 )
+from core.services.solver import run_optimization
 from datetime import datetime, timedelta
 import math
-
-
-def _build_gantt_data(asignaciones):
-    """Construye los datos del Gantt a partir de asignaciones de una planificación."""
-    base_year = datetime.now().year
-    base_date = datetime(base_year, 6, 1)
-
-    lotes_list = sorted(list(set(asig.lote.codigo for asig in asignaciones)))
-    y_pos = {lote_cod: idx for idx, lote_cod in enumerate(lotes_list)}
-
-    gantt_data = []
-    for asig in asignaciones:
-        st_date = base_date + timedelta(days=int(asig.dia_siembra) - 1)
-        ht_date = base_date + timedelta(days=int(asig.dia_cosecha) - 1)
-        duration = (ht_date - st_date).days
-
-        gantt_data.append({
-            "lote": asig.lote.codigo,
-            "y_pos": y_pos[asig.lote.codigo],
-            "cultivo": asig.cultivo.codigo,
-            "slot": asig.slot.codigo,
-            "fecha_siembra": st_date.strftime("%d/%m/%Y"),
-            "fecha_cosecha": ht_date.strftime("%d/%m/%Y"),
-            "duration": duration,
-            "dia_siembra": asig.dia_siembra,
-            "dia_cosecha": asig.dia_cosecha,
-            "ingreso": asig.ingreso,
-            "costo": asig.costo,
-            "profit": asig.ingreso - asig.costo if asig.ingreso is not None and asig.costo is not None else 0
-        })
-
-    return gantt_data, lotes_list
 
 @login_required(login_url="login")
 def home(request):
@@ -233,74 +202,63 @@ def planificacion_list(request):
 def ejecutar_optimizacion(request):
     if request.method == "POST":
         nombre = request.POST.get("nombre", f"Planificación {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-
-        # Crear planificación pendiente; el worker la procesará en segundo plano
+        
+        # Crear planificación pendiente
         planificacion = Planificacion.objects.create(
             nombre=nombre,
             estado=Planificacion.Estado.PENDIENTE
         )
 
-        return redirect("planificacion_status", pk=planificacion.id)
+        # Ejecutar solver (sincrónicamente por ahora para HTMX)
+        success = run_optimization(planificacion.id)
+        
+        planificacion.refresh_from_db()
+
+        if success and planificacion.estado == Planificacion.Estado.COMPLETADO:
+            asignaciones = planificacion.asignaciones.select_related("lote", "cultivo", "slot").order_by("lote__codigo", "slot__orden")
+            
+            # Generar datos para Gantt
+            gantt_data = []
+            base_year = datetime.now().year
+            base_date = datetime(base_year, 6, 1)
+
+            # Eje Y: Lotes
+            lotes_list = sorted(list(set(asig.lote.codigo for asig in asignaciones)))
+            y_pos = {lote_cod: idx for idx, lote_cod in enumerate(lotes_list)}
+
+            # Eje X: Convertir días de siembra/cosecha a fechas reales
+            for asig in asignaciones:
+                # Omitir barbecho o asignaciones vacías en el gráfico si es necesario
+                st_date = base_date + timedelta(days=int(asig.dia_siembra) - 1)
+                ht_date = base_date + timedelta(days=int(asig.dia_cosecha) - 1)
+                duration = (ht_date - st_date).days
+
+                gantt_data.append({
+                    "lote": asig.lote.codigo,
+                    "y_pos": y_pos[asig.lote.codigo],
+                    "cultivo": asig.cultivo.codigo,
+                    "slot": asig.slot.codigo,
+                    "fecha_siembra": st_date.strftime("%d/%m/%Y"),
+                    "fecha_cosecha": ht_date.strftime("%d/%m/%Y"),
+                    "duration": duration,
+                    "dia_siembra": asig.dia_siembra,
+                    "dia_cosecha": asig.dia_cosecha,
+                    "ingreso": asig.ingreso,
+                    "costo": asig.costo,
+                    "profit": asig.ingreso - asig.costo if asig.ingreso is not None and asig.costo is not None else 0
+                })
+
+            context = {
+                "planificacion": planificacion,
+                "gantt_data": gantt_data,
+                "lotes_list": lotes_list,
+            }
+            return render(request, "core/resultados_planificacion.html", context)
+        else:
+            return render(
+                request,
+                "core/resultados_planificacion.html",
+                {"error": "Ocurrió un error al ejecutar el solver. Verifica la configuración de datos en tu base de datos."},
+            )
 
     return redirect("planificacion_list")
-
-
-@login_required(login_url="login")
-def planificacion_status(request, pk):
-    planificacion = get_object_or_404(Planificacion, pk=pk)
-
-    if planificacion.estado == Planificacion.Estado.COMPLETADO:
-        asignaciones = planificacion.asignaciones.select_related(
-            "lote", "cultivo", "slot"
-        ).order_by("lote__codigo", "slot__orden")
-        gantt_data, lotes_list = _build_gantt_data(asignaciones)
-        context = {
-            "planificacion": planificacion,
-            "gantt_data": gantt_data,
-            "lotes_list": lotes_list,
-        }
-        return render(request, "core/resultados_planificacion.html", context)
-
-    if planificacion.estado == Planificacion.Estado.ERROR:
-        return render(
-            request,
-            "core/resultados_planificacion.html",
-            {
-                "error": "Ocurrió un error al ejecutar el solver. Verifica la configuración de datos en tu base de datos.",
-                "planificacion": planificacion,
-            },
-        )
-
-    # PENDIENTE o EJECUTANDO: mostrar página de espera con polling
-    return render(request, "core/planificacion_status.html", {"planificacion": planificacion})
-
-
-@login_required(login_url="login")
-def planificacion_status_partial(request, pk):
-    """Fragmento para actualización vía HTMX (polling)."""
-    planificacion = get_object_or_404(Planificacion, pk=pk)
-
-    if planificacion.estado == Planificacion.Estado.COMPLETADO:
-        asignaciones = planificacion.asignaciones.select_related(
-            "lote", "cultivo", "slot"
-        ).order_by("lote__codigo", "slot__orden")
-        gantt_data, lotes_list = _build_gantt_data(asignaciones)
-        context = {
-            "planificacion": planificacion,
-            "gantt_data": gantt_data,
-            "lotes_list": lotes_list,
-        }
-        return render(request, "core/resultados_planificacion.html", context)
-
-    if planificacion.estado == Planificacion.Estado.ERROR:
-        return render(
-            request,
-            "core/resultados_planificacion.html",
-            {
-                "error": "Ocurrió un error al ejecutar el solver. Verifica la configuración de datos en tu base de datos.",
-                "planificacion": planificacion,
-            },
-        )
-
-    # Sigue pendiente o ejecutando: devolver fragmento de espera
-    return render(request, "core/planificacion_status.html", {"planificacion": planificacion})
