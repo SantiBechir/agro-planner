@@ -44,6 +44,7 @@ staticfiles/
 *.swp
 *.swo
 .DS_Store
+*AGENTS.md
 
 # Coverage
 .coverage
