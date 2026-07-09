@@ -38,13 +38,13 @@ def run_optimization(planificacion_id):
 
         tc_dict = data["tc_dict"]
         model.tc = pyo.Set(model.c, within=model.t, initialize=tc_dict)
-        model.t_to_c = pyo.Param(model.t, initialize={slot: camp for camp in data["c"] for slot in tc_dict[camp]})
+        model.t_to_c = pyo.Param(model.t, initialize={slot: camp for camp in data["c"] for slot in tc_dict[camp]}, within=pyo.Any)
 
         # ---- PARAMETERS ----
         model.ha = pyo.Param(model.j, initialize=data["ha"])
         model.max_m = pyo.Param(model.j, initialize=data["max_m"])
         model.max_s = pyo.Param(model.j, initialize=data["max_s"])
-        model.sueloj = pyo.Param(model.j, initialize=data["sueloj"])
+        model.sueloj = pyo.Param(model.j, initialize=data["sueloj"], within=pyo.Any)
 
         # Costos y parámetros sparse: se usan funciones de lookup con default
         # para evitar errores cuando una combinación no existe en la base de datos.
@@ -264,14 +264,24 @@ def run_optimization(planificacion_id):
         model.yield3 = pyo.Constraint(model.i, model.j, model.t, rule=yield3)
 
         # ---- SOLVER ----
-        opt = pyo.SolverFactory('appsi_highs')
-        time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
-        if time_limit_raw:
-            opt.config.time_limit = int(time_limit_raw)
-        mip_gap_raw = config('SOLVER_MIP_GAP', default='')
-        if mip_gap_raw:
-            opt.config.mip_gap = float(mip_gap_raw)
-        results = opt.solve(model, tee=False)
+        try:
+            opt = pyo.SolverFactory('highs')
+            opt.options['mip_rel_gap'] = 0.05
+            opt.options['threads'] = 0
+            opt.options['presolve'] = 'on'
+            opt.options['parallel'] = 'on'
+
+            time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
+            if time_limit_raw:
+                opt.options['time_limit'] = float(time_limit_raw)
+            mip_gap_raw = config('SOLVER_MIP_GAP', default='')
+            if mip_gap_raw:
+                opt.options['mip_rel_gap'] = float(mip_gap_raw)
+            results = opt.solve(model, tee=False)
+        except Exception:
+            # Fallback a GLPK
+            opt = pyo.SolverFactory('glpk')
+            results = opt.solve(model, tee=False)
 
         # 3. Guardar resultados
         if results.solver.status == pyo.SolverStatus.ok and results.solver.termination_condition == pyo.TerminationCondition.optimal:

@@ -218,13 +218,13 @@ tc_dict = {
 model.tc = pyo.Set(model.c, within=model.t, initialize=tc_dict,
                    doc='Slots that belong to crop season c')
 model.t_to_c = pyo.Param(model.t,
-                          initialize={t: c for c in model.c for t in model.tc[c]})
+                          initialize={t: c for c in model.c for t in model.tc[c]}, within=pyo.Any)
 
 # ── PARAMETERS ────────────────────────────────────────────────────────
 model.ha     = pyo.Param(model.j, initialize=ha)
 model.max_m  = pyo.Param(model.j, initialize=max_m)
 model.max_s  = pyo.Param(model.j, initialize=max_s)
-model.sueloj = pyo.Param(model.j, initialize=sueloj)
+model.sueloj = pyo.Param(model.j, initialize=sueloj, within=pyo.Any)
 
 model.fsp  = pyo.Param(model.i, model.c,           initialize=fsp_dict)
 model.sc   = pyo.Param(model.i, model.c,           initialize=sc_dict)
@@ -665,11 +665,11 @@ def plot_rotation_impact_by_lot(model):
 #                           SOLVER
 ##########################################################################
 
-opt = SolverFactory('appsi_highs')
-# HiGHS options (APPSI interface uses config attributes)
-# opt.options['mip_gap'] = 0.01
-# opt.options['time_limit'] = 3600
-# opt.options['log_file'] = 'Plan_agr.log'
+opt = SolverFactory('highs')
+opt.options['mip_rel_gap'] = 0.05
+opt.options['threads'] = 0
+opt.options['presolve'] = 'on'
+opt.options['parallel'] = 'on'
 
 results = opt.solve(model, tee=True)
 

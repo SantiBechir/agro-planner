@@ -235,11 +235,15 @@ def ejecutar_optimizacion(request):
     if request.method == "POST":
         nombre = request.POST.get("nombre", f"Planificación {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-        # Crear planificación pendiente; el worker la procesará en segundo plano
+        # Crear planificación pendiente
         planificacion = Planificacion.objects.create(
             nombre=nombre,
             estado=Planificacion.Estado.PENDIENTE
         )
+
+        # Ejecutar optimización de forma síncrona
+        from core.services.solver import run_optimization
+        run_optimization(planificacion.id)
 
         return redirect("planificacion_status", pk=planificacion.id)
 

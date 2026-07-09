@@ -94,7 +94,9 @@
                             {{ plan.fecha_creacion|date:"d/m/Y H:i" }}
                         </td>
                         <td class="whitespace-nowrap px-6 py-4.5 text-sm font-bold text-slate-800">
-                            {{ plan.nombre }}
+                            <a hx-get="{% url 'planificacion_status' plan.id %}" hx-target="#main-content" class="text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer">
+                                {{ plan.nombre }}
+                            </a>
                         </td>
                         <td class="whitespace-nowrap px-6 py-4.5 text-xs">
                             {% if plan.estado == 'completado' %}
