@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from core.models import Lote, Cultivo, Planificacion, AsignacionLoteSlot
+from core.models import Lote, Cultivo, Planificacion, AsignacionLoteSlot, HistorialLoteCultivo
 from core.services.solver import run_optimization
 from datetime import datetime, timedelta
 import math
@@ -47,6 +47,18 @@ def logout_view(request):
 @login_required(login_url="login")
 def lote_list(request):
     lotes = Lote.objects.all().select_related("tipo_suelo")
+
+    # Agregar los últimos 3 cultivos históricos a cada lote
+    for lote in lotes:
+        lote.historial = (
+            HistorialLoteCultivo.objects.filter(
+                lote=lote,
+                presente=True,
+            )
+            .select_related("cultivo", "campania_historica")
+            .order_by("-campania_historica__orden")[:3]
+        )
+
     return render(request, "core/lotes_list.html", {"lotes": lotes})
 
 
