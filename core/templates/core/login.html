@@ -1,0 +1,73 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Iniciar Sesión - AgroPlanner{% endblock %}
+
+{% block content %}
+<div class="relative flex min-h-screen flex-col justify-center overflow-hidden py-12 sm:px-6 lg:px-8">
+    <div class="sm:mx-auto sm:w-full sm:max-w-md z-10">
+        <div class="flex flex-col items-center space-y-4">
+            <!-- Logo UTN original -->
+            <img src="{% static 'core/imagen/logoUTN.png' %}" alt="Logo UTN" 
+                 class="h-16 w-16 object-cover rounded-xl shadow-lg border border-slate-200/50">
+            
+            <h2 class="text-center text-3xl font-extrabold tracking-tight text-[#2f5e31] drop-shadow-sm">AgroPlanner</h2>
+        </div>
+        <p class="mt-2 text-center text-xs font-semibold text-slate-700 tracking-wide uppercase bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full w-fit mx-auto border border-emerald-500/10 shadow-sm">
+            Planificación Agrícola de Precisión
+        </p>
+    </div>
+
+    <div class="mt-6 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4 sm:px-0">
+        <!-- Original login box layout elevated with light glassmorphism -->
+        <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-2xl rounded-2xl px-6 py-8 sm:px-10">
+            <h3 class="text-xl font-bold text-[#2f5e31] mb-6 text-center">Iniciar Sesión</h3>
+            
+            {% if messages %}
+            <div class="mb-5 rounded-xl bg-red-50 border border-red-200 p-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        {% for message in messages %}
+                        <p class="text-sm font-semibold text-red-700 leading-normal">{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <form class="space-y-5" action="{% url 'login' %}" method="POST">
+                {% csrf_token %}
+                <div>
+                    <label for="username" class="block text-sm font-semibold text-[#2f5e31]">Usuario o Email</label>
+                    <div class="mt-1.5">
+                        <input id="username" name="username" type="text" required autocomplete="username" 
+                            class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder-slate-400 focus:border-[#4d8b4f] focus:outline-none focus:ring-1 focus:ring-[#4d8b4f] sm:text-sm transition duration-200"
+                            placeholder="santi">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-semibold text-[#2f5e31]">Contraseña</label>
+                    <div class="mt-1.5">
+                        <input id="password" name="password" type="password" required autocomplete="current-password" 
+                            class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder-slate-400 focus:border-[#4d8b4f] focus:outline-none focus:ring-1 focus:ring-[#4d8b4f] sm:text-sm transition duration-200"
+                            placeholder="••••••••">
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" 
+                        class="flex w-full justify-center rounded-xl bg-[#4d8b4f] hover:bg-[#3d6f3f] px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-700/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4d8b4f] transition duration-300 transform active:scale-[0.98]">
+                        Ingresar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

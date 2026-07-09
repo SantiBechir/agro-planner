@@ -1,0 +1,16 @@
+from .development import *
+
+# Overrides for your local environment.
+# Since config/settings/local.py is ignored by Git, you can customize it freely.
+
+# Example 1: Use SQLite instead of PostgreSQL for local development
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.sqlite3",
+#         "NAME": BASE_DIR / "db.sqlite3",
+#     }
+# }
+
+# Example 2: Change DEBUG or ALLOWED_HOSTS
+# DEBUG = True
+# ALLOWED_HOSTS = ["*"]

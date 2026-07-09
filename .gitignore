@@ -27,6 +27,7 @@ ENV/
 # Django
 *.log
 local_settings.py
+config/settings/local.py
 db.sqlite3
 db.sqlite3-journal
 media/
@@ -43,6 +44,7 @@ staticfiles/
 *.swp
 *.swo
 .DS_Store
+*AGENTS.md
 
 # Coverage
 .coverage

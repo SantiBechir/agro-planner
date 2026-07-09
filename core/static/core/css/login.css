@@ -1,0 +1,78 @@
+/* Página completa */
+body {
+    margin: 0;
+    padding: 0;
+
+    height: 100vh;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    font-family: Arial, sans-serif;
+
+    background-image: url('/static/core/imagen/fondo.png');
+    background-size: cover;
+    background-position: center;
+}
+
+/* Caja del login */
+.login-box {
+    width: 350px;
+
+    padding: 40px;
+
+    background-color: rgba(255, 255, 255, 0.95);
+
+    border-radius: 20px;
+
+    box-shadow: 0px 4px 15px rgba(0,0,0,0.3);
+
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Título */
+.login-box h1 {
+    margin: 0;
+
+    text-align: center;
+
+    color: #2f5e31;
+}
+
+/* Inputs */
+.login-box input {
+    padding: 12px;
+
+    border: 1px solid #ccc;
+
+    border-radius: 10px;
+
+    font-size: 16px;
+}
+
+/* Botón */
+.login-box button {
+    padding: 12px;
+
+    border: none;
+
+    border-radius: 10px;
+
+    background-color: #4d8b4f;
+
+    color: white;
+
+    font-size: 16px;
+
+    cursor: pointer;
+
+    transition: 0.3s;
+}
+
+/* Hover botón */
+.login-box button:hover {
+    background-color: #3d6f3f;
+}
