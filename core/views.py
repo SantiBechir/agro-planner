@@ -2,9 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.db import transaction
+from django.core.paginator import Paginator
 from core.models import (
     Lote,
     Cultivo,
+    Costo,
+    TipoCosto,
+    Campania,
     Planificacion,
     AsignacionLoteSlot,
     TipoSuelo,
@@ -218,6 +223,76 @@ def cultivo_create(request):
             messages.error(request, "Todos los campos son obligatorios.")
 
     return cultivo_list(request)
+
+
+@login_required(login_url="login")
+def costo_list(request):
+    selected_tipo = request.GET.get("tipo", "")
+    selected_campania = request.GET.get("campania", "")
+    selected_cultivo = request.GET.get("cultivo", "")
+    selected_page = request.GET.get("page", "1")
+
+    if request.method == "POST":
+        posted_values = {
+            key.removeprefix("costo_"): value.strip().replace(",", ".")
+            for key, value in request.POST.items()
+            if key.startswith("costo_")
+        }
+        updates = []
+        errors = []
+
+        for costo_id, raw_value in posted_values.items():
+            try:
+                value = float(raw_value)
+                if value < 0:
+                    raise ValueError("negative")
+                updates.append((int(costo_id), value))
+            except (TypeError, ValueError):
+                errors.append(costo_id)
+
+        if errors:
+            messages.error(request, "Los valores deben ser números mayores o iguales a cero.")
+        else:
+            with transaction.atomic():
+                costos_by_id = Costo.objects.in_bulk([costo_id for costo_id, _ in updates])
+                changed = 0
+                for costo_id, value in updates:
+                    costo = costos_by_id.get(costo_id)
+                    if costo is None:
+                        continue
+                    if costo.valor != value:
+                        costo.valor = value
+                        costo.save(update_fields=["valor"])
+                        changed += 1
+            messages.success(request, f"Se actualizaron {changed} valores de precios y costos.")
+
+    costos = Costo.objects.select_related(
+        "cultivo", "tipo_costo", "campania", "lote"
+    ).order_by("tipo_costo__codigo", "cultivo__codigo", "campania__orden", "lote__codigo")
+
+    if selected_tipo:
+        costos = costos.filter(tipo_costo_id=selected_tipo)
+    if selected_campania:
+        costos = costos.filter(campania_id=selected_campania)
+    if selected_cultivo:
+        costos = costos.filter(cultivo_id=selected_cultivo)
+
+    paginator = Paginator(costos, 7)
+    page_obj = paginator.get_page(selected_page)
+
+    context = {
+        "costos": page_obj.object_list,
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "tipos_costo": TipoCosto.objects.order_by("codigo"),
+        "campanias": Campania.objects.order_by("orden"),
+        "cultivos": Cultivo.objects.order_by("codigo"),
+        "selected_tipo": selected_tipo,
+        "selected_campania": selected_campania,
+        "selected_cultivo": selected_cultivo,
+        "selected_page": selected_page,
+    }
+    return render(request, "core/costos_list.html", context)
 
 
 @login_required(login_url="login")

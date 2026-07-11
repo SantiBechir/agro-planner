@@ -1,7 +1,7 @@
 from django.test import TestCase, RequestFactory
 from django.contrib.auth.models import User
-from core.views import cultivo_list, lote_list, lote_create, cultivo_create
-from core.models import Cultivo, TipoSuelo, RendimientoCultivoSuelo, Lote, CompatibilidadCultivoSuelo
+from core.views import cultivo_list, lote_list, lote_create, cultivo_create, costo_list
+from core.models import Cultivo, TipoSuelo, RendimientoCultivoSuelo, Lote, CompatibilidadCultivoSuelo, TipoCosto, Costo, Campania
 from datetime import datetime, timedelta
 
 class CultivoListDirectTest(TestCase):
@@ -149,3 +149,78 @@ class CultivoCreateDirectTest(TestCase):
         html = response.content.decode('utf-8')
         self.assertIn("GIRASOL", html)
         self.assertTrue("3.8" in html or "3,8" in html)
+
+
+class CostoListDirectTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="password")
+        self.factory = RequestFactory()
+        self.cultivo = Cultivo.objects.create(
+            codigo="SOJA_TEST",
+            nombre="Soja Test",
+            tipo=Cultivo.Tipo.PRINCIPAL,
+            duracion_dias=120,
+            siembra_inicio=10,
+            siembra_fin=90,
+        )
+        self.tipo_costo = TipoCosto.objects.create(
+            codigo="fsp",
+            descripcion="Future selling price",
+            unidad="USD/ton",
+        )
+        self.campania = Campania.objects.create(codigo="C1", orden=1)
+        self.costo = Costo.objects.create(
+            cultivo=self.cultivo,
+            tipo_costo=self.tipo_costo,
+            campania=self.campania,
+            valor=320.0,
+        )
+
+    def test_costo_list_updates_values(self):
+        request = self.factory.post('/costos/', {f"costo_{self.costo.id}": "355.50"})
+        request.user = self.user
+
+        from django.contrib.messages.storage.base import BaseStorage
+        class DummyStorage(BaseStorage):
+            def _get(self):
+                return [], True
+            def _store(self, messages, response, *args, **kwargs):
+                return []
+        setattr(request, '_messages', DummyStorage(request))
+
+        response = costo_list(request)
+        self.assertEqual(response.status_code, 200)
+
+        self.costo.refresh_from_db()
+        self.assertEqual(self.costo.valor, 355.5)
+
+        html = response.content.decode('utf-8')
+        self.assertIn("SOJA_TEST", html)
+        self.assertIn("fsp", html)
+
+    def test_costo_list_paginates_values(self):
+        for index in range(55):
+            cultivo = Cultivo.objects.create(
+                codigo=f"MAIZ_{index}",
+                nombre=f"Maiz {index}",
+                tipo=Cultivo.Tipo.PRINCIPAL,
+                duracion_dias=120,
+                siembra_inicio=10,
+                siembra_fin=90,
+            )
+            Costo.objects.create(
+                cultivo=cultivo,
+                tipo_costo=self.tipo_costo,
+                campania=self.campania,
+                valor=300.0 + index,
+            )
+
+        request = self.factory.get('/costos/')
+        request.user = self.user
+
+        response = costo_list(request)
+        self.assertEqual(response.status_code, 200)
+
+        html = response.content.decode('utf-8')
+        self.assertIn("Página 1 de 8", html)
+        self.assertIn("Siguiente", html)

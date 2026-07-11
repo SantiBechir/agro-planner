@@ -9,6 +9,7 @@ urlpatterns = [
     path("lotes/crear/", views.lote_create, name="lote_create"),
     path("cultivos/", views.cultivo_list, name="cultivo_list"),
     path("cultivos/crear/", views.cultivo_create, name="cultivo_create"),
+    path("costos/", views.costo_list, name="costo_list"),
     path("planificaciones/", views.planificacion_list, name="planificacion_list"),
     path("planificaciones/ejecutar/", views.ejecutar_optimizacion, name="ejecutar_optimizacion"),
     path("planificaciones/<int:pk>/estado/", views.planificacion_status, name="planificacion_status"),
