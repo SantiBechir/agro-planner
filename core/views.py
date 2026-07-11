@@ -15,6 +15,7 @@ from core.models import (
     TipoSuelo,
     RendimientoCultivoSuelo,
     CompatibilidadCultivoSuelo,
+    HistorialLoteCultivo
 )
 from core.services.solver import run_optimization
 from datetime import datetime, timedelta
@@ -92,6 +93,19 @@ def logout_view(request):
 @login_required(login_url="login")
 def lote_list(request):
     lotes = Lote.objects.all().select_related("tipo_suelo")
+
+    # Agregar los últimos 3 cultivos históricos a cada lote
+    for lote in lotes:
+        lote.historial = (
+            HistorialLoteCultivo.objects.filter(
+                lote=lote,
+                presente=True,
+            )
+            .select_related("cultivo", "campania_historica")
+            .order_by("-campania_historica__orden")[:3]
+        )
+
+    return render(request, "core/lotes_list.html", {"lotes": lotes})
     tipos_suelo = TipoSuelo.objects.all().order_by("codigo")
     return render(request, "core/lotes_list.html", {"lotes": lotes, "tipos_suelo": tipos_suelo})
 
