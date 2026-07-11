@@ -1,7 +1,10 @@
 import pyomo.environ as pyo
+import pyomo.contrib.appsi.solvers.highs  # registers the appsi_highs solver
+from decouple import config
 from django.db import transaction
 from core.models import Planificacion, AsignacionLoteSlot, Lote, Cultivo, SlotSiembra
 from core.services.optimization_inputs import build_pyomo_input_data
+
 
 def run_optimization(planificacion_id):
     try:
@@ -35,37 +38,40 @@ def run_optimization(planificacion_id):
 
         tc_dict = data["tc_dict"]
         model.tc = pyo.Set(model.c, within=model.t, initialize=tc_dict)
-        model.t_to_c = pyo.Param(model.t, initialize={slot: camp for camp in data["c"] for slot in tc_dict[camp]})
+        model.t_to_c = pyo.Param(model.t, initialize={slot: camp for camp in data["c"] for slot in tc_dict[camp]}, within=pyo.Any)
 
         # ---- PARAMETERS ----
         model.ha = pyo.Param(model.j, initialize=data["ha"])
         model.max_m = pyo.Param(model.j, initialize=data["max_m"])
         model.max_s = pyo.Param(model.j, initialize=data["max_s"])
-        model.sueloj = pyo.Param(model.j, initialize=data["sueloj"])
+        model.sueloj = pyo.Param(model.j, initialize=data["sueloj"], within=pyo.Any)
 
-        model.fsp = pyo.Param(model.i, model.c, initialize=data["fsp_dict"])
-        model.sc = pyo.Param(model.i, model.c, initialize=data["sc_dict"])
-        model.hc = pyo.Param(model.i, model.c, initialize=data["hc_dict"])
-        model.frc = pyo.Param(model.i, model.j, model.c, initialize=data["frc_dict"])
-        model.vr = pyo.Param(model.i, model.j, model.c, initialize=data["vr_dict"])
-        model.tf = pyo.Param(model.i, initialize=data["tf_dict"])
-        model.scp = pyo.Param(model.i, initialize=data["scp_dict"])
-        model.cp = pyo.Param(model.i, model.c, initialize=data["cp_dict"])
-        model.st = pyo.Param(model.i, initialize=data["st_dict"])
-        model.cst = pyo.Param(model.i, model.c, initialize=data["cst_dict"])
-        model.clt = pyo.Param(model.i, model.c, initialize=data["clt_dict"])
-        model.gt = pyo.Param(model.i, initialize=data["gt"])
-        model.st_start = pyo.Param(model.i, initialize=data["st_start"])
-        model.st_end = pyo.Param(model.i, initialize=data["st_end"])
+        # Costos y parámetros sparse: se usan funciones de lookup con default
+        # para evitar errores cuando una combinación no existe en la base de datos.
+        model.fsp = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["fsp_dict"].get((i, c), 0.0))
+        model.sc = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["sc_dict"].get((i, c), 0.0))
+        model.hc = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["hc_dict"].get((i, c), 0.0))
+        model.frc = pyo.Param(model.i, model.j, model.c, initialize=lambda m, i, j, c: data["frc_dict"].get((i, j, c), 0.0))
+        model.vr = pyo.Param(model.i, model.j, model.c, initialize=lambda m, i, j, c: data["vr_dict"].get((i, j, c), 0.0))
+        model.tf = pyo.Param(model.i, initialize=lambda m, i: data["tf_dict"].get(i, 0.0))
+        model.scp = pyo.Param(model.i, initialize=lambda m, i: data["scp_dict"].get(i, 0.0))
+        model.cp = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["cp_dict"].get((i, c), 0.0))
+        model.st = pyo.Param(model.i, initialize=lambda m, i: data["st_dict"].get(i, 0.0))
+        model.cst = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["cst_dict"].get((i, c), 0.0))
+        model.clt = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["clt_dict"].get((i, c), 0.0))
+        model.gt = pyo.Param(model.i, initialize=data["gt"], default=0)
+        model.st_start = pyo.Param(model.i, initialize=data["st_start"], default=0)
+        model.st_end = pyo.Param(model.i, initialize=data["st_end"], default=365)
 
-        model.setup = pyo.Param(model.i, model.i, initialize=data["setup_dict"])
-        model.ar = pyo.Param(model.i, model.i, initialize=data["ar_dict"], mutable=True)
-        model.sueloi = pyo.Param(model.i, model.s, initialize=data["sueloi_dict"])
-        model.xh = pyo.Param(model.i, model.j, model.ch, initialize=data["xh_dict"])
-        model.alfa = pyo.Param(model.l, initialize=data["alfa_dict"])
-        model.ymax = pyo.Param(model.s, model.i, initialize=data["y_max_dict"])
-        model.red = pyo.Param(model.i, model.i, initialize=data["red_dict"])
+        model.setup = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["setup_dict"].get((i1, i2), 0.0))
+        model.ar = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["ar_dict"].get((i1, i2), 1), mutable=True)
+        model.sueloi = pyo.Param(model.i, model.s, initialize=lambda m, i, s: data["sueloi_dict"].get((i, s), 1))
+        model.xh = pyo.Param(model.i, model.j, model.ch, initialize=lambda m, i, j, ch: data["xh_dict"].get((i, j, ch), 0))
+        model.alfa = pyo.Param(model.l, initialize=lambda m, l: data["alfa_dict"].get(l, 0.0))
+        model.ymax = pyo.Param(model.s, model.i, initialize=lambda m, s, i: data["y_max_dict"].get((s, i), 0.0))
+        model.red = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["red_dict"].get((i1, i2), 0.0))
         model.ord = pyo.Param(model.c, initialize=data["ord_dict"])
+        model.lag = pyo.Param(model.l, initialize={'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3, 'L4': 4, 'L5': 5})
 
         # ---- VARIABLES ----
         model.PROFIT = pyo.Var(domain=pyo.Reals, initialize=0)
@@ -93,12 +99,8 @@ def run_optimization(planificacion_id):
             return model.ILU == sum(model.gt[i] * model.X[i, j, t] for i in model.i for j in model.j for t in model.t)
         model.ilu_def = pyo.Constraint(rule=ILU_def)
 
-        # Multi-objective (Ponderado, alpha = 1 -> maximiza Profit)
-        alpha = 1
-        model.obj = pyo.Objective(
-            expr=alpha * model.PROFIT + (1 - alpha) * model.ILU,
-            sense=pyo.maximize
-        )
+        # Objective aligned with plan-agricola-v4: maximize profit
+        model.obj = pyo.Objective(expr=model.PROFIT, sense=pyo.maximize)
 
         def revenues(model):
             return model.REVENUES == sum(sum(sum(sum(model.fsp[i, c] * model.Y[i, j, t]
@@ -136,34 +138,43 @@ def run_optimization(planificacion_id):
 
         def sowingday_lb(model, i, j, t):
             c = model.t_to_c[t]
-            return model.st_start[i] + 365 * (model.ord[c] - 1) <= model.ST[i, j, t]
+            return (model.st_start[i] + 365 * (model.ord[c] - 1)) * model.X[i, j, t] <= model.ST[i, j, t]
         model.sowingday_lb = pyo.Constraint(model.i, model.j, model.t, rule=sowingday_lb)
 
         def sowingday_ub(model, i, j, t):
             c = model.t_to_c[t]
-            return model.ST[i, j, t] <= model.st_end[i] + 365 * (model.ord[c] - 1)
+            return model.ST[i, j, t] <= (model.st_end[i] + 365 * (model.ord[c] - 1)) * model.X[i, j, t]
         model.sowingday_ub = pyo.Constraint(model.i, model.j, model.t, rule=sowingday_ub)
 
         def harvestday(model, i, j, t):
             return model.HT[i, j, t] >= model.ST[i, j, t] + model.gt[i] * model.X[i, j, t]
         model.harvestday = pyo.Constraint(model.i, model.j, model.t, rule=harvestday)
 
-        def sequencing(model, ib, i, j, t, tb):
-            ord_t = model.t.ord(t)
-            ord_tb = model.t.ord(tb)
-            max_val = max((model.st_end[k].value + model.gt[k].value) for k in model.i) + 365 * len(model.c)
-            if ord_tb < ord_t:
-                return model.ST[i, j, t] >= model.HT[ib, j, tb] + model.setup[ib, i] - max_val * (2 - model.X[i, j, t] - model.X[ib, j, tb])
+        def harvestday_set0(model, i, j, t):
+            c = model.t_to_c[t]
+            max_val = 365 * model.ord[c]
+            return model.HT[i, j, t] <= max_val * model.X[i, j, t]
+        model.harvestday_set0 = pyo.Constraint(model.i, model.j, model.t, rule=harvestday_set0)
+
+        # Secuencias no permitidas por incompatibilidad de fechas
+        for ii in model.i:
+            for ib in model.i:
+                st_end_ii = pyo.value(model.st_end[ii])
+                st_start_ib = pyo.value(model.st_start[ib])
+                gt_ib = pyo.value(model.gt[ib])
+                setup_ib_ii = pyo.value(model.setup[ib, ii])
+                if (st_end_ii <= st_start_ib + gt_ib + setup_ib_ii) \
+                        and (st_end_ii + 365 <= st_start_ib + gt_ib + setup_ib_ii):
+                    model.ar[ib, ii].value = 0
+
+        def sequencing(model, i, ib, j, t, tb):
+            c = model.t_to_c[t]
+            max_val = 365 * (model.ord[c])
+            if (model.t.ord(tb) + 1 == model.t.ord(t)) and (pyo.value(model.ar[ib, i]) == 1):
+                return model.ST[i, j, t] >= model.HT[ib, j, tb] + model.setup[ib, i] - max_val * (1 - model.X[i, j, t])
             else:
                 return pyo.Constraint.Skip
         model.sequencing = pyo.Constraint(model.i, model.i, model.j, model.t, model.t, rule=sequencing)
-
-        # Determinar secuencias no permitidas
-        for i in model.i:
-            for ib in model.i:
-                if (model.st_end[i].value <= model.st_start[ib].value + model.gt[ib].value + model.setup[ib, i].value) & \
-                   (model.st_end[i].value + 365 <= model.st_start[ib].value + model.gt[ib].value + model.setup[ib, i].value):
-                    model.ar[ib, i].value = 0
 
         def sequencingNAforsoil(model, ib, i, j, t):
             try:
@@ -218,8 +229,6 @@ def run_optimization(planificacion_id):
             return model.Y[i, j, t] <= model.ymax[s, i] * model.ha[j] * model.X[i, j, t]
         model.yield2 = pyo.Constraint(model.i, model.j, model.t, rule=yield2)
 
-        model.lag_param = pyo.Param(model.l, initialize={'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3, 'L4': 4, 'L5': 5})
-
         def history1(model, i, j, t, cb):
             c = model.t_to_c[t]
             if model.c.ord(cb) <= model.c.ord(c):
@@ -242,7 +251,7 @@ def run_optimization(planificacion_id):
             c = model.t_to_c[t]
             ord_c = model.c.ord(c)
             ord_ch = model.ch.ord(ch)
-            lag = model.lag_param[l]
+            lag = model.lag[l]
             if lag != ord_c + ord_ch - 1:
                 return pyo.Constraint.Skip
             return model.H[i, j, t, l] == model.xh[i, j, ch]
@@ -256,7 +265,18 @@ def run_optimization(planificacion_id):
 
         # ---- SOLVER ----
         try:
-            opt = pyo.SolverFactory('gurobi')
+            opt = pyo.SolverFactory('highs')
+            opt.options['mip_rel_gap'] = 0.05
+            opt.options['threads'] = 0
+            opt.options['presolve'] = 'on'
+            opt.options['parallel'] = 'on'
+
+            time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
+            if time_limit_raw:
+                opt.options['time_limit'] = float(time_limit_raw)
+            mip_gap_raw = config('SOLVER_MIP_GAP', default='')
+            if mip_gap_raw:
+                opt.options['mip_rel_gap'] = float(mip_gap_raw)
             results = opt.solve(model, tee=False)
         except Exception:
             # Fallback a GLPK
@@ -342,7 +362,9 @@ def run_optimization(planificacion_id):
             return False
 
     except Exception as e:
+        import traceback
         planificacion.estado = Planificacion.Estado.ERROR
         planificacion.save()
         print(f"Error en la optimización: {str(e)}")
+        traceback.print_exc()
         return False
