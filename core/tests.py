@@ -1,7 +1,10 @@
 from django.test import TestCase, RequestFactory
 from django.contrib.auth.models import User
-from core.views import cultivo_list, lote_list, lote_create, cultivo_create, costo_list
-from core.models import Cultivo, TipoSuelo, RendimientoCultivoSuelo, Lote, CompatibilidadCultivoSuelo, TipoCosto, Costo, Campania
+from io import StringIO
+from unittest.mock import patch
+from core.views import cultivo_list, lote_list, lote_create, cultivo_create, costo_list, ejecutar_optimizacion
+from core.models import Cultivo, TipoSuelo, RendimientoCultivoSuelo, Lote, CompatibilidadCultivoSuelo, TipoCosto, Costo, Campania, Planificacion
+from core.management.commands.process_optimizations import Command as ProcessOptimizationsCommand
 from datetime import datetime, timedelta
 
 class CultivoListDirectTest(TestCase):
@@ -224,3 +227,41 @@ class CostoListDirectTest(TestCase):
         html = response.content.decode('utf-8')
         self.assertIn("Página 1 de 8", html)
         self.assertIn("Siguiente", html)
+
+
+class EjecutarOptimizacionDirectTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="password")
+        self.factory = RequestFactory()
+
+    def test_creates_pending_job_without_running_solver_in_request(self):
+        request = self.factory.post(
+            "/planificaciones/ejecutar/",
+            {"nombre": "Planificacion asincrona"},
+        )
+        request.user = self.user
+
+        response = ejecutar_optimizacion(request)
+
+        planificacion = Planificacion.objects.get(nombre="Planificacion asincrona")
+        self.assertEqual(planificacion.estado, Planificacion.Estado.PENDIENTE)
+        self.assertRedirects(
+            response,
+            f"/planificaciones/{planificacion.id}/estado/",
+            fetch_redirect_response=False,
+        )
+
+
+class ProcessOptimizationsCommandTest(TestCase):
+    @patch("core.management.commands.process_optimizations.run_optimization")
+    def test_solver_failure_is_not_reported_as_success(self, run_optimization_mock):
+        planificacion = Planificacion.objects.create(nombre="Planificacion fallida")
+        run_optimization_mock.return_value = False
+        command = ProcessOptimizationsCommand(stdout=StringIO(), stderr=StringIO())
+
+        processed = command._process_one()
+
+        self.assertFalse(processed)
+        run_optimization_mock.assert_called_once_with(planificacion.id)
+        self.assertIn("termino con error", command.stderr.getvalue())
+        self.assertNotIn("finalizada", command.stdout.getvalue())

@@ -264,24 +264,19 @@ def run_optimization(planificacion_id):
         model.yield3 = pyo.Constraint(model.i, model.j, model.t, rule=yield3)
 
         # ---- SOLVER ----
-        try:
-            opt = pyo.SolverFactory('highs')
-            opt.options['mip_rel_gap'] = 0.05
-            opt.options['threads'] = 0
-            opt.options['presolve'] = 'on'
-            opt.options['parallel'] = 'on'
+        opt = pyo.SolverFactory('highs')
+        opt.options['mip_rel_gap'] = 0.05
+        opt.options['threads'] = 0
+        opt.options['presolve'] = 'on'
+        opt.options['parallel'] = 'on'
 
-            time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
-            if time_limit_raw:
-                opt.options['time_limit'] = float(time_limit_raw)
-            mip_gap_raw = config('SOLVER_MIP_GAP', default='')
-            if mip_gap_raw:
-                opt.options['mip_rel_gap'] = float(mip_gap_raw)
-            results = opt.solve(model, tee=False)
-        except Exception:
-            # Fallback a GLPK
-            opt = pyo.SolverFactory('glpk')
-            results = opt.solve(model, tee=False)
+        time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
+        if time_limit_raw:
+            opt.options['time_limit'] = float(time_limit_raw)
+        mip_gap_raw = config('SOLVER_MIP_GAP', default='')
+        if mip_gap_raw:
+            opt.options['mip_rel_gap'] = float(mip_gap_raw)
+        results = opt.solve(model, tee=False)
 
         # 3. Guardar resultados
         if results.solver.status == pyo.SolverStatus.ok and results.solver.termination_condition == pyo.TerminationCondition.optimal:

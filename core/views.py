@@ -17,7 +17,6 @@ from core.models import (
     CompatibilidadCultivoSuelo,
     HistorialLoteCultivo
 )
-from core.services.solver import run_optimization
 from datetime import datetime, timedelta
 import math
 
@@ -329,10 +328,6 @@ def ejecutar_optimizacion(request):
             nombre=nombre,
             estado=Planificacion.Estado.PENDIENTE
         )
-
-        # Ejecutar optimización de forma síncrona
-        from core.services.solver import run_optimization
-        run_optimization(planificacion.id)
 
         return redirect("planificacion_status", pk=planificacion.id)
 

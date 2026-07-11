@@ -56,7 +56,14 @@ class Command(BaseCommand):
                 planificacion_id = planificacion.id
 
             self.stdout.write(f"Procesando planificacion {planificacion_id}...")
-            run_optimization(planificacion_id)
+            succeeded = run_optimization(planificacion_id)
+            if not succeeded:
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"La planificacion {planificacion_id} termino con error."
+                    )
+                )
+                return False
             self.stdout.write(
                 self.style.SUCCESS(f"Planificacion {planificacion_id} finalizada.")
             )
