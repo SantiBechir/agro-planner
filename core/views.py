@@ -157,7 +157,7 @@ def cultivo_list(request):
         cultivo.rendimientos = [
             {
                 "suelo": str(r.tipo_suelo),
-                "valor": r.valorCoo
+                "valor": r.valor
             }
             for r in cultivo.rendimientocultivosuelo_set.all().order_by("tipo_suelo__codigo")
         ]
