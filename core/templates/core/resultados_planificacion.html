@@ -261,7 +261,7 @@
               Margen Estimado
             </p>
             <p class="text-sm font-black text-[#4d8b4f] mt-1">
-              $ {{ bar.profit|floatformat:2 }} USD
+              $ {{ bar.profit|floatformat:2 }} USD/ha
             </p>
           </div>
           <div class="col-span-2 md:col-span-1">
@@ -271,8 +271,7 @@
               Ingreso / Costo
             </p>
             <p class="text-xs text-slate-600 font-semibold mt-1">
-              Ing: ${{ bar.ingreso|floatformat:0 }} | Cost: ${{
-              bar.costo|floatformat:0 }}
+              Ing: ${{ bar.ingreso|floatformat:0 }} | Cost: ${{ bar.costo|floatformat:0 }} [USD/ha]
             </p>
           </div>
         </div>

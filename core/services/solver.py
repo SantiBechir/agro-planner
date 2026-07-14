@@ -316,27 +316,18 @@ def run_optimization(planificacion_id):
                         rendimiento_ind = ymax_val * lote.superficie_ha * z_val
 
                         fsp_val = data["fsp_dict"].get((cultivo.codigo, camp_code), 0)
-                        ingreso_ind = fsp_val * rendimiento_ind
+                        ingreso_ind = fsp_val * ymax_val * z_val
 
                         sc_val = data["sc_dict"].get((cultivo.codigo, camp_code), 0)
                         hc_val = data["hc_dict"].get((cultivo.codigo, camp_code), 0)
                         frc_val = data["frc_dict"].get((cultivo.codigo, lote.codigo, camp_code), 0)
                         vr_val = data["vr_dict"].get((cultivo.codigo, lote.codigo, camp_code), 0)
-                        tf_val = data["tf_dict"].get(cultivo.codigo, 0)
-                        scp_val = data["scp_dict"].get(cultivo.codigo, 0)
-                        cp_val = data["cp_dict"].get((cultivo.codigo, camp_code), 0)
-                        st_val = data["st_dict"].get(cultivo.codigo, 0)
-                        cst_val = data["cst_dict"].get((cultivo.codigo, camp_code), 0)
-                        clt_val = data["clt_dict"].get((cultivo.codigo, camp_code), 0)
-
-                        sowing_c = sc_val * lote.superficie_ha
-                        harvesting_c = hc_val * lote.superficie_ha
-                        rental_c = frc_val + fsp_val * vr_val * rendimiento_ind
-                        post_harvest_c = (tf_val * fsp_val * rendimiento_ind +
-                                          scp_val * cp_val * rendimiento_ind +
-                                          (st_val * cst_val + (1 - st_val) * clt_val) * rendimiento_ind)
-
-                        costo_ind = sowing_c + harvesting_c + rental_c + post_harvest_c
+                        costo_ind = (
+                            sc_val
+                            + hc_val
+                            + frc_val / lote.superficie_ha
+                            + fsp_val * vr_val * z_val * ymax_val
+                        )
 
                         AsignacionLoteSlot.objects.create(
                             planificacion=planificacion,

@@ -212,7 +212,8 @@ def cultivo_create(request):
                         duracion_dias=int(duracion_dias),
                         siembra_inicio=siembra_inicio,
                         siembra_fin=siembra_fin,
-                        no_repetir_sin_intermedio=no_repetir
+                        no_repetir_sin_intermedio=no_repetir,
+                        habilitado_optimizacion=False,
                     )
                     
                     # Crear rendimientos y compatibilidades por cada tipo de suelo
@@ -229,7 +230,62 @@ def cultivo_create(request):
                             tipo_suelo=suelo,
                             compatible=True
                         )
-                messages.success(request, f"Cultivo {codigo} creado con éxito.")
+
+                    tipos_costo = {
+                        tipo.codigo: tipo
+                        for tipo in TipoCosto.objects.filter(
+                            codigo__in=[
+                                "fsp", "sc", "hc", "frc", "vr", "tf",
+                                "scp", "cp", "st", "cst", "clt",
+                            ]
+                        )
+                    }
+                    campanias = list(Campania.objects.order_by("orden"))
+                    lotes = list(Lote.objects.order_by("codigo"))
+                    costos = []
+
+                    for codigo_tipo in ("tf", "scp", "st"):
+                        if codigo_tipo in tipos_costo:
+                            costos.append(Costo(
+                                cultivo=cultivo,
+                                tipo_costo=tipos_costo[codigo_tipo],
+                                valor=0,
+                                configurado=False,
+                            ))
+
+                    for codigo_tipo in ("fsp", "sc", "hc", "cp", "cst", "clt"):
+                        if codigo_tipo in tipos_costo:
+                            costos.extend(
+                                Costo(
+                                    cultivo=cultivo,
+                                    tipo_costo=tipos_costo[codigo_tipo],
+                                    campania=campania,
+                                    valor=0,
+                                    configurado=False,
+                                )
+                                for campania in campanias
+                            )
+
+                    for codigo_tipo in ("frc", "vr"):
+                        if codigo_tipo in tipos_costo:
+                            costos.extend(
+                                Costo(
+                                    cultivo=cultivo,
+                                    tipo_costo=tipos_costo[codigo_tipo],
+                                    campania=campania,
+                                    lote=lote,
+                                    valor=0,
+                                    configurado=False,
+                                )
+                                for campania in campanias
+                                for lote in lotes
+                            )
+
+                    Costo.objects.bulk_create(costos)
+                messages.success(
+                    request,
+                    f"Cultivo {codigo} creado. Completa sus precios y costos antes de habilitarlo.",
+                )
             except Exception as e:
                 messages.error(request, f"Error al crear cultivo: {str(e)}")
         else:
@@ -244,6 +300,10 @@ def costo_list(request):
     selected_campania = request.GET.get("campania", "")
     selected_cultivo = request.GET.get("cultivo", "")
     selected_page = request.GET.get("page", "1")
+    selected_cultivo_obj = None
+
+    if selected_cultivo:
+        selected_cultivo_obj = Cultivo.objects.filter(pk=selected_cultivo).first()
 
     if request.method == "POST":
         posted_values = {
@@ -275,8 +335,26 @@ def costo_list(request):
                         continue
                     if costo.valor != value:
                         costo.valor = value
-                        costo.save(update_fields=["valor"])
                         changed += 1
+                    costo.configurado = True
+                    costo.save(update_fields=["valor", "configurado"])
+
+                if request.POST.get("action") == "enable" and selected_cultivo_obj:
+                    pendientes = selected_cultivo_obj.costo_set.filter(
+                        configurado=False
+                    ).count()
+                    if pendientes:
+                        messages.error(
+                            request,
+                            f"Todavía faltan revisar {pendientes} valores antes de habilitar el cultivo.",
+                        )
+                    else:
+                        selected_cultivo_obj.habilitado_optimizacion = True
+                        selected_cultivo_obj.save(update_fields=["habilitado_optimizacion"])
+                        messages.success(
+                            request,
+                            f"Cultivo {selected_cultivo_obj.codigo} habilitado para optimización.",
+                        )
             messages.success(request, f"Se actualizaron {changed} valores de precios y costos.")
 
     costos = Costo.objects.select_related(
@@ -304,6 +382,11 @@ def costo_list(request):
         "selected_campania": selected_campania,
         "selected_cultivo": selected_cultivo,
         "selected_page": selected_page,
+        "selected_cultivo_obj": selected_cultivo_obj,
+        "costos_pendientes": (
+            selected_cultivo_obj.costo_set.filter(configurado=False).count()
+            if selected_cultivo_obj else 0
+        ),
     }
     return render(request, "core/costos_list.html", context)
 

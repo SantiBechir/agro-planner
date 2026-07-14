@@ -20,7 +20,7 @@ def build_pyomo_input_data():
     # ── Conjuntos (Sets) ──────────────────────────────────────────────
     j = list(Lote.objects.values_list("codigo", flat=True))
 
-    cultivos = Cultivo.objects.all()
+    cultivos = Cultivo.objects.filter(habilitado_optimizacion=True)
     i = list(cultivos.values_list("codigo", flat=True).order_by("pk"))
 
     i_p = list(
