@@ -94,8 +94,10 @@ def lote_list(request):
     lotes = Lote.objects.all().select_related("tipo_suelo")
 
     # Agregar los últimos 3 cultivos históricos a cada lote
+    anio_inicio_campania_actual = 2025
+
     for lote in lotes:
-        lote.historial = (
+        historial = (
             HistorialLoteCultivo.objects.filter(
                 lote=lote,
                 presente=True,
@@ -103,6 +105,16 @@ def lote_list(request):
             .select_related("cultivo", "campania_historica")
             .order_by("-campania_historica__orden")[:3]
         )
+
+        for h in historial:
+            numero = h.campania_historica.orden
+
+            inicio = anio_inicio_campania_actual - numero
+            fin = inicio + 1
+
+            h.campania_mostrar = f"{inicio}/{fin}"
+
+        lote.historial = historial
 
     return render(request, "core/lotes_list.html", {"lotes": lotes})
     tipos_suelo = TipoSuelo.objects.all().order_by("codigo")
@@ -292,13 +304,63 @@ def costo_list(request):
 
     paginator = Paginator(costos, 7)
     page_obj = paginator.get_page(selected_page)
+    
+    # Mostrar las campañas como años (2025/2026, 2026/2027, ...)
+    anio_inicio_campania_actual = 2025
 
+    for costo in page_obj.object_list:
+        if costo.campania:
+            numero = costo.campania.orden
+
+            inicio = anio_inicio_campania_actual + (numero - 1)
+            fin = inicio + 1
+
+            costo.campania_mostrar = f"{inicio}/{fin}"
+        else:
+            costo.campania_mostrar = "Global"
+    anio_inicio_campania_actual = 2025
+
+    campanias = Campania.objects.order_by("orden")
+
+    for campania in campanias:
+        inicio = anio_inicio_campania_actual + (campania.orden - 1)
+        fin = inicio + 1
+        campania.nombre_mostrar = f"{inicio}/{fin}"
+        
+    TRADUCCIONES_TIPO_COSTO = {
+        "fsp": "Precio futuro de venta",
+        "sc": "Costo de siembra",
+        "hc": "Costo de cosecha",
+        "frc": "Costo fijo de arrendamiento",
+        "vr": "Costo variable de arrendamiento",
+        "tf": "Comisión de comercialización",
+        "scp": "Producción acondicionada",
+        "cp": "Costo de acondicionamiento",
+        "st": "Proporción de transporte corto / embolsado",
+        "cst": "Costo de flete corta distancia",
+        "clt": "Costo de flete larga distancia",
+    }
+    
+    tipos_costo = TipoCosto.objects.order_by("codigo")
+
+    for tipo in tipos_costo:
+        tipo.descripcion_mostrar = TRADUCCIONES_TIPO_COSTO.get(
+            tipo.codigo,
+            tipo.descripcion,
+        )
+    
+    for costo in page_obj.object_list:
+        costo.tipo_costo.descripcion_mostrar = TRADUCCIONES_TIPO_COSTO.get(
+            costo.tipo_costo.codigo,
+            costo.tipo_costo.descripcion,
+        )
+    
     context = {
         "costos": page_obj.object_list,
         "page_obj": page_obj,
         "paginator": paginator,
-        "tipos_costo": TipoCosto.objects.order_by("codigo"),
-        "campanias": Campania.objects.order_by("orden"),
+        "tipos_costo": tipos_costo,
+        "campanias": campanias,
         "cultivos": Cultivo.objects.order_by("codigo"),
         "selected_tipo": selected_tipo,
         "selected_campania": selected_campania,

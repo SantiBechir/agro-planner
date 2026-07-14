@@ -106,7 +106,7 @@
 
           {% for historial in lote.historial %}
           <div class="grid grid-cols-2 text-sm py-1">
-            <span>{{ historial.campania_historica.codigo }}</span>
+            <span>{{ historial.campania_mostrar }}</span>
             <span>{{ historial.cultivo.nombre }}</span>
           </div>
           {% empty %}

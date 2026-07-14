@@ -25,7 +25,7 @@
                 <select name="tipo" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
                     <option value="">Todos</option>
                     {% for tipo in tipos_costo %}
-                    <option value="{{ tipo.id }}" {% if selected_tipo == tipo.id|stringformat:"s" %}selected{% endif %}>{{ tipo.codigo }} - {{ tipo.descripcion }}</option>
+                    <option value="{{ tipo.id }}" {% if selected_tipo == tipo.id|stringformat:"s" %}selected{% endif %}>{{ tipo.descripcion_mostrar }} </option>
                     {% endfor %}
                 </select>
             </div>
@@ -34,7 +34,7 @@
                 <select name="campania" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
                     <option value="">Todas</option>
                     {% for campania in campanias %}
-                    <option value="{{ campania.id }}" {% if selected_campania == campania.id|stringformat:"s" %}selected{% endif %}>{{ campania.codigo }}</option>
+                    <option value="{{ campania.id }}" {% if selected_campania == campania.id|stringformat:"s" %}selected{% endif %}>{{ campania.nombre_mostrar }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -76,11 +76,12 @@
                     {% for costo in costos %}
                     <tr class="hover:bg-emerald-50/40 transition">
                         <td class="px-5 py-3 whitespace-nowrap">
-                            <div class="text-sm font-extrabold text-[#2f5e31]">{{ costo.tipo_costo.codigo }}</div>
-                            <div class="text-[10px] font-semibold text-slate-400">{{ costo.tipo_costo.descripcion }}</div>
+                            <div class="text-sm font-bold text-slate-700">
+                                {{ costo.tipo_costo.descripcion_mostrar }}
+                            </div>
                         </td>
                         <td class="px-5 py-3 text-sm font-bold text-slate-700 whitespace-nowrap">{{ costo.cultivo.codigo }}</td>
-                        <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.campania.codigo|default:"Global" }}</td>
+                        <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.campania_mostrar }}</td>
                         <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.lote.codigo|default:"Todos" }}</td>
                         <td class="px-5 py-3 whitespace-nowrap">
                             <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
