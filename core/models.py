@@ -64,6 +64,7 @@ class Cultivo(models.Model):
     siembra_inicio = models.IntegerField()
     siembra_fin = models.IntegerField()
     no_repetir_sin_intermedio = models.BooleanField(default=False)
+    habilitado_optimizacion = models.BooleanField(default=True)
 
     def __str__(self):
         return self.nombre
@@ -95,6 +96,7 @@ class Costo(models.Model):
     cultivo = models.ForeignKey(Cultivo, on_delete=models.CASCADE)
     tipo_costo = models.ForeignKey(TipoCosto, on_delete=models.PROTECT)
     valor = models.FloatField()
+    configurado = models.BooleanField(default=True)
     campania = models.ForeignKey(
         Campania, on_delete=models.CASCADE, null=True, blank=True
     )

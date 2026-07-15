@@ -18,6 +18,13 @@
     </div>
     {% endif %}
 
+    {% if selected_cultivo_obj and not selected_cultivo_obj.habilitado_optimizacion %}
+    <div class="p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-900 text-sm font-semibold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <span>{{ selected_cultivo_obj.codigo }} no participa en la optimización. Faltan revisar {{ costos_pendientes }} valores.</span>
+        <span class="text-xs font-bold uppercase tracking-wider">Cultivo en borrador</span>
+    </div>
+    {% endif %}
+
     <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-5">
         <form hx-get="{% url 'costo_list' %}" hx-target="#main-content" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
@@ -74,7 +81,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     {% for costo in costos %}
-                    <tr class="hover:bg-emerald-50/40 transition">
+                    <tr class="{% if not costo.configurado %}bg-amber-50/50{% endif %} hover:bg-emerald-50/40 transition">
                         <td class="px-5 py-3 whitespace-nowrap">
                             <div class="text-sm font-bold text-slate-700">
                                 {{ costo.tipo_costo.descripcion_mostrar }}
@@ -85,6 +92,9 @@
                         <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.lote.codigo|default:"Todos" }}</td>
                         <td class="px-5 py-3 whitespace-nowrap">
                             <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                            {% if not costo.configurado %}
+                            <span class="ml-2 text-[9px] font-bold uppercase tracking-wider text-amber-700">Pendiente</span>
+                            {% endif %}
                         </td>
                         <td class="px-5 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{{ costo.tipo_costo.unidad|default:"-" }}</td>
                     </tr>
@@ -101,9 +111,16 @@
                 <p class="text-xs text-slate-500 font-semibold">
                     Mostrando {{ page_obj.start_index }}-{{ page_obj.end_index }} de {{ paginator.count }} valores. Los cambios se usarán en la próxima optimización que ejecutes.
                 </p>
-                <button type="submit" class="px-5 py-2.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">
+                <div class="flex flex-wrap gap-2">
+                <button type="submit" name="action" value="save" class="px-5 py-2.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">
                     Guardar Cambios
                 </button>
+                {% if selected_cultivo_obj and not selected_cultivo_obj.habilitado_optimizacion %}
+                <button type="submit" name="action" value="enable" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition shadow-md">
+                    Guardar y Habilitar
+                </button>
+                {% endif %}
+                </div>
             </div>
 
             {% if page_obj.has_other_pages %}
