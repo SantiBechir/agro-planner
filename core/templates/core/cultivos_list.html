@@ -1,4 +1,4 @@
-<div class="space-y-8 max-w-7xl mx-auto" x-data="{ showModal: false }">
+<div class="space-y-8 max-w-7xl mx-auto" x-data="{ showModal: {% if open_modal %}true{% else %}false{% endif %} }">
   <!-- Header -->
   <div
     class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0"
@@ -28,8 +28,9 @@
   {% if messages %}
   <div class="space-y-2">
     {% for message in messages %}
+    {% if message.tags != 'error' %}
     <div
-      class="p-4 rounded-xl border {% if message.tags == 'error' %}bg-red-50 border-red-200 text-red-800{% else %}bg-emerald-50 border-emerald-200 text-[#2f5e31]{% endif %} text-sm font-semibold flex items-center justify-between"
+      class="p-4 rounded-xl border bg-emerald-50 border-emerald-200 text-[#2f5e31] text-sm font-semibold flex items-center justify-between"
     >
       <span>{{ message.message }}</span>
       <button
@@ -39,6 +40,7 @@
         Cerrar
       </button>
     </div>
+    {% endif %}
     {% endfor %}
   </div>
   {% endif %}
@@ -258,9 +260,27 @@
         <form
           hx-post="{% url 'cultivo_create' %}"
           hx-target="#main-content"
-          @submit="showModal = false"
           class="space-y-4"
         >
+          {% if messages %}
+          <div class="space-y-2">
+            {% for message in messages %}
+            {% if message.tags == 'error' %}
+            <div class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800 flex items-center justify-between gap-3">
+              <span>{{ message.message }}</span>
+              <button
+                type="button"
+                class="text-red-400 hover:text-red-700 text-base leading-none"
+                aria-label="Cerrar error"
+                onclick="this.parentElement.remove()"
+              >
+                &times;
+              </button>
+            </div>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
           {% csrf_token %}
           <div class="grid grid-cols-1 gap-4">
             <div>
@@ -271,6 +291,7 @@
               <input
                 type="text"
                 name="nombre"
+                value="{{ form_data.nombre|default:'' }}"
                 required
                 placeholder="Ej: Cebada Forrajera"
                 class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
@@ -289,9 +310,9 @@
                 required
                 class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
               >
-                <option value="principal" selected>De Renta</option>
-                <option value="secundario">De Servicio</option>
-                <option value="otro">Otro / Barbecho</option>
+                <option value="principal" {% if form_data.tipo == "principal" or not form_data.tipo %}selected{% endif %}>De Renta</option>
+                <option value="secundario" {% if form_data.tipo == "secundario" %}selected{% endif %}>De Servicio</option>
+                <option value="otro" {% if form_data.tipo == "otro" %}selected{% endif %}>Otro / Barbecho</option>
               </select>
             </div>
             <div>
@@ -302,6 +323,7 @@
               <input
                 type="number"
                 name="duracion_dias"
+                value="{{ form_data.duracion_dias|default:'' }}"
                 required
                 placeholder="Ej: 120"
                 class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
@@ -318,6 +340,7 @@
               <input
                 type="date"
                 name="siembra_inicio_fecha"
+                value="{{ form_data.siembra_inicio_fecha|default:'' }}"
                 min="{{ min_date }}"
                 max="{{ max_date }}"
                 required
@@ -332,6 +355,7 @@
               <input
                 type="date"
                 name="siembra_fin_fecha"
+                value="{{ form_data.siembra_fin_fecha|default:'' }}"
                 min="{{ min_date }}"
                 max="{{ max_date }}"
                 required
@@ -345,6 +369,7 @@
               type="checkbox"
               id="no_repetir_sin_intermedio"
               name="no_repetir_sin_intermedio"
+              {% if form_data.no_repetir_sin_intermedio %}checked{% endif %}
               class="rounded border-slate-300 text-[#4d8b4f] focus:ring-[#4d8b4f]"
             />
             <label
@@ -372,6 +397,7 @@
                   type="number"
                   step="0.1"
                   name="rendimiento_{{ suelo.id }}"
+                  value="{{ suelo.form_value|default:'' }}"
                   required
                   placeholder="0.0"
                   class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
