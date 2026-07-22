@@ -19,6 +19,7 @@ from core.models import (
 )
 from datetime import datetime, timedelta
 import math
+import unicodedata
 
 
 def _build_gantt_data(asignaciones):
@@ -153,7 +154,7 @@ def lote_create(request):
 
 @login_required(login_url="login")
 def cultivo_list(request):
-    cultivos = Cultivo.objects.prefetch_related("rendimientocultivosuelo_set__tipo_suelo").order_by("codigo")
+    cultivos = Cultivo.objects.exclude(codigo="BARBECHO").prefetch_related("rendimientocultivosuelo_set__tipo_suelo").order_by("codigo")
     tipos_suelo = TipoSuelo.objects.all().order_by("codigo")
     base_year = datetime.now().year
     base_date = datetime(base_year, 6, 1)
@@ -192,9 +193,30 @@ def cultivo_list(request):
 @login_required(login_url="login")
 def cultivo_create(request):
     if request.method == "POST":
-        codigo = request.POST.get("codigo")
         nombre = request.POST.get("nombre")
+        codigo = (
+            unicodedata.normalize("NFD", nombre)
+            .encode("ascii", "ignore")
+            .decode("utf-8")
+            .upper()
+            .strip()
+        ) if nombre else ""
         tipo = request.POST.get("tipo")
+        
+        if Cultivo.objects.filter(nombre__iexact=nombre.strip()).exists():
+            messages.error(
+                request,
+                f"Ya existe un cultivo con el nombre '{nombre}'."
+            )
+            return cultivo_list(request)
+
+        if Cultivo.objects.filter(codigo=codigo).exists():
+            messages.error(
+                request,
+                f"Ya existe un cultivo con el código '{codigo}'."
+            )
+            return cultivo_list(request)
+        
         duracion_dias = request.POST.get("duracion_dias")
         siembra_inicio_fecha_str = request.POST.get("siembra_inicio_fecha")
         siembra_fin_fecha_str = request.POST.get("siembra_fin_fecha")
