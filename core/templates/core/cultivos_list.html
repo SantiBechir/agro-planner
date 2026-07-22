@@ -139,7 +139,8 @@
           <!-- Progress bar indicating sowing window in a 365-day cycle -->
           <div
             class="bg-gradient-to-r from-emerald-500 to-green-400 h-2 rounded-full"
-            style="margin-left: {% widthratio cultivo.siembra_inicio 365 100 %}%; width: {% widthratio cultivo.siembra_fin|add:1 365 100 %}%;"
+            x-data="{ startPct: {{ cultivo.siembra_inicio_pct|floatformat:4 }}, endPct: {{ cultivo.siembra_fin_pct|floatformat:4 }} }"
+            :style="'margin-left: ' + startPct + '%; width: ' + endPct + '%;'"
           ></div>
         </div>
       </div>

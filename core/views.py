@@ -169,6 +169,8 @@ def cultivo_list(request, form_data=None, open_modal=False):
         ht_date = base_date + timedelta(days=int(cultivo.siembra_fin) - 1)
         cultivo.siembra_inicio_fecha = st_date.strftime("%d/%m/%Y")
         cultivo.siembra_fin_fecha = ht_date.strftime("%d/%m/%Y")
+        cultivo.siembra_inicio_pct = (int(cultivo.siembra_inicio) / 365) * 100
+        cultivo.siembra_fin_pct = ((int(cultivo.siembra_fin) + 1) / 365) * 100
 
         # Rendimientos por tipo de suelo
         cultivo.rendimientos = [
