@@ -164,6 +164,8 @@ def cultivo_list(request):
         ht_date = base_date + timedelta(days=int(cultivo.siembra_fin) - 1)
         cultivo.siembra_inicio_fecha = st_date.strftime("%d/%m/%Y")
         cultivo.siembra_fin_fecha = ht_date.strftime("%d/%m/%Y")
+        cultivo.siembra_inicio_pct = (int(cultivo.siembra_inicio) / 365) * 100
+        cultivo.siembra_fin_pct = ((int(cultivo.siembra_fin) + 1) / 365) * 100
 
         # Rendimientos por tipo de suelo
         cultivo.rendimientos = [
@@ -192,8 +194,8 @@ def cultivo_list(request):
 @login_required(login_url="login")
 def cultivo_create(request):
     if request.method == "POST":
-        codigo = request.POST.get("codigo")
         nombre = request.POST.get("nombre")
+        codigo = request.POST.get("codigo")
         tipo = request.POST.get("tipo")
         duracion_dias = request.POST.get("duracion_dias")
         siembra_inicio_fecha_str = request.POST.get("siembra_inicio_fecha")
