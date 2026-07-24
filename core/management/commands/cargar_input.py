@@ -2,6 +2,7 @@ import pandas as pd
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import (
+    Ambiente,
     Campania,
     CampaniaHistorica,
     CompatibilidadCultivoSuelo,
@@ -18,6 +19,12 @@ from core.models import (
     TipoCosto,
     TipoSuelo,
 )
+
+TIPOS_SUELO_NOMBRES = {
+    "S1": "Molisol",
+    "S2": "Alfisol",
+    "S3": "Vertisol",
+}
 
 
 def _read_block_with_header(
@@ -43,6 +50,23 @@ def _read_block_with_header(
         block = block[block[drop_na_subset].notna()]
     block.set_index(index_cols, inplace=True)
     return block
+
+
+def campania_historica_desde_columna_excel(ch_code):
+    """Mapea una columna "CHn" del Excel a la CampaniaHistorica por año.
+
+    CH1 es la campaña inmediatamente anterior a la campaña actual
+    (base_year - 1), CH2 la previa (base_year - 2) y CH3 la anterior
+    (base_year - 3). Se preserva el código "CHn" al crear la fila, de modo
+    que las corridas repetidas siguen siendo idempotentes con las filas
+    originales CH1/CH2/CH3.
+    """
+    lag = int(str(ch_code).strip().upper().removeprefix("CH"))
+    base_year = CampaniaHistorica.anio_base_actual()
+    return CampaniaHistorica.objects.get_or_create(
+        anio_inicio=base_year - lag,
+        defaults={"codigo": str(ch_code).strip().upper()},
+    )
 
 
 class Command(BaseCommand):
@@ -86,8 +110,10 @@ class Command(BaseCommand):
         codigos = sets.iloc[0:3, 5].dropna().tolist()
         creados = actualizados = 0
         for codigo in codigos:
+            codigo = str(codigo).strip().upper()
             obj, created = TipoSuelo.objects.update_or_create(
-                codigo=codigo, defaults={"nombre": codigo}
+                codigo=codigo,
+                defaults={"nombre": TIPOS_SUELO_NOMBRES.get(codigo, codigo)},
             )
             if created:
                 creados += 1
@@ -163,10 +189,8 @@ class Command(BaseCommand):
         sets = pd.read_excel(xl, sheet_name="Sets")
         codigos = sets.iloc[0:3, 11].dropna().tolist()
         creados = actualizados = 0
-        for i, codigo in enumerate(codigos):
-            obj, created = CampaniaHistorica.objects.update_or_create(
-                codigo=codigo, defaults={"orden": i + 1}
-            )
+        for codigo in codigos:
+            _, created = campania_historica_desde_columna_excel(codigo)
             if created:
                 creados += 1
             else:
@@ -232,19 +256,118 @@ class Command(BaseCommand):
         p_j.dropna(how="all", inplace=True)
         p_j.set_index("J", inplace=True)
 
+        usa_ambientes = "suelo" not in p_j.columns
+        proporciones = rendimientos = None
+        if usa_ambientes:
+            proporciones = pd.read_excel(
+                xl,
+                sheet_name="Plots (J)",
+                header=1,
+                usecols="F:I",
+            )
+            proporciones.rename(
+                columns={proporciones.columns[0]: "J"},
+                inplace=True,
+            )
+            proporciones.columns = [
+                str(columna).split(".", 1)[0].strip()
+                for columna in proporciones.columns
+            ]
+            proporciones.dropna(subset=["J"], inplace=True)
+            proporciones.set_index("J", inplace=True)
+
+            rendimientos = pd.read_excel(
+                xl,
+                sheet_name="Plots (J)",
+                header=1,
+                usecols="K:N",
+            )
+            rendimientos.rename(
+                columns={rendimientos.columns[0]: "J"},
+                inplace=True,
+            )
+            rendimientos.columns = [
+                str(columna).split(".", 1)[0].strip()
+                for columna in rendimientos.columns
+            ]
+            rendimientos.dropna(subset=["J"], inplace=True)
+            rendimientos.set_index("J", inplace=True)
+
         creados = actualizados = 0
         for codigo, row in p_j.iterrows():
-            tipo_suelo = TipoSuelo.objects.get(codigo=row["suelo"])
-            obj, created = Lote.objects.update_or_create(
+            codigo = str(codigo).strip()
+            superficie_total = float(row["ha"])
+
+            if usa_ambientes:
+                if codigo not in proporciones.index:
+                    raise CommandError(
+                        f"Faltan proporciones de suelo para el lote {codigo}."
+                    )
+                proporciones_lote = {
+                    str(suelo_codigo).strip().upper(): float(proporcion)
+                    for suelo_codigo, proporcion in proporciones.loc[codigo].items()
+                    if pd.notna(proporcion) and float(proporcion) > 0
+                }
+                if not proporciones_lote:
+                    raise CommandError(
+                        f"El lote {codigo} no tiene una proporcion de suelo positiva."
+                    )
+                suelo_dominante_codigo = max(
+                    proporciones_lote,
+                    key=proporciones_lote.get,
+                )
+            else:
+                suelo_dominante_codigo = str(row["suelo"]).strip().upper()
+                proporciones_lote = {suelo_dominante_codigo: 1.0}
+
+            tipo_suelo = TipoSuelo.objects.get(
+                codigo=suelo_dominante_codigo
+            )
+            lote, created = Lote.objects.update_or_create(
                 codigo=codigo,
                 defaults={
                     "nombre": codigo,
-                    "superficie_ha": float(row["ha"]),
+                    "superficie_ha": superficie_total,
                     "max_cultivos_principales": int(row["max_m"]),
                     "max_cultivos_secundarios": int(row["max_s"]),
                     "tipo_suelo": tipo_suelo,
                 },
             )
+
+            proporcion_total = sum(proporciones_lote.values())
+            suelos_importados = []
+            for suelo_codigo, proporcion in proporciones_lote.items():
+                suelo = TipoSuelo.objects.get(codigo=suelo_codigo)
+                rendimiento = "M"
+                if (
+                    usa_ambientes
+                    and codigo in rendimientos.index
+                    and suelo_codigo in rendimientos.columns
+                ):
+                    rendimiento_excel = str(
+                        rendimientos.loc[codigo, suelo_codigo]
+                    ).strip().upper()
+                    if rendimiento_excel in {"A", "M", "B"}:
+                        rendimiento = rendimiento_excel
+
+                Ambiente.objects.update_or_create(
+                    lote=lote,
+                    tipo_suelo=suelo,
+                    defaults={
+                        "rendimiento_esperado": rendimiento,
+                        "superficie_ha": (
+                            superficie_total
+                            * proporcion
+                            / proporcion_total
+                        ),
+                    },
+                )
+                suelos_importados.append(suelo.pk)
+
+            lote.ambientes.exclude(
+                tipo_suelo_id__in=suelos_importados
+            ).delete()
+
             if created:
                 creados += 1
             else:
@@ -335,7 +458,7 @@ class Command(BaseCommand):
                 tipo_costo=tipo,
                 campania=campania,
                 lote=None,
-                defaults={"valor": float(valor)},
+                defaults={"valor": float(valor), "configurado": True},
             )
             if created:
                 creados += 1
@@ -373,7 +496,7 @@ class Command(BaseCommand):
                 tipo_costo=tipo,
                 campania=campania,
                 lote=lote,
-                defaults={"valor": float(valor)},
+                defaults={"valor": float(valor), "configurado": True},
             )
             if created:
                 creados += 1
@@ -400,7 +523,7 @@ class Command(BaseCommand):
                 tipo_costo=tipo,
                 campania=None,
                 lote=None,
-                defaults={"valor": float(valor)},
+                defaults={"valor": float(valor), "configurado": True},
             )
             if created:
                 creados += 1
@@ -524,8 +647,8 @@ class Command(BaseCommand):
             except Lote.DoesNotExist:
                 continue
             try:
-                ch = CampaniaHistorica.objects.get(codigo=str(ch_code).strip())
-            except CampaniaHistorica.DoesNotExist:
+                ch, _ = campania_historica_desde_columna_excel(ch_code)
+            except (ValueError, AttributeError):
                 continue
             presente = bool(int(valor))
             obj, created = HistorialLoteCultivo.objects.update_or_create(

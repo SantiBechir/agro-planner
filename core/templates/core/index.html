@@ -69,7 +69,7 @@ Control - AgroPlanner{% endblock %} {% block content %}
       </div>
       <!-- Navigation móvil -->
       <div class="mt-8 h-0 flex-1 overflow-y-auto">
-        <nav class="space-y-1.5 px-2">
+        <nav class="space-y-1.5 px-2" data-testid="mobile-navigation">
           <a
             href="{% url 'home' %}"
             @click="activeTab = 'dashboard'; sidebarOpen = false"
@@ -77,6 +77,46 @@ Control - AgroPlanner{% endblock %} {% block content %}
             :class="activeTab === 'dashboard' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
           >
             Dashboard
+          </a>
+          <a
+            href="{% url 'lote_list' %}"
+            hx-get="{% url 'lote_list' %}"
+            hx-target="#main-content"
+            @click="activeTab = 'lotes'; sidebarOpen = false"
+            class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150"
+            :class="activeTab === 'lotes' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
+          >
+            Lotes
+          </a>
+          <a
+            href="{% url 'cultivo_list' %}"
+            hx-get="{% url 'cultivo_list' %}"
+            hx-target="#main-content"
+            @click="activeTab = 'cultivos'; sidebarOpen = false"
+            class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150"
+            :class="activeTab === 'cultivos' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
+          >
+            Cultivos
+          </a>
+          <a
+            href="{% url 'costo_list' %}"
+            hx-get="{% url 'costo_list' %}"
+            hx-target="#main-content"
+            @click="activeTab = 'costos'; sidebarOpen = false"
+            class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150"
+            :class="activeTab === 'costos' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
+          >
+            Precios y Costos
+          </a>
+          <a
+            href="{% url 'planificacion_list' %}"
+            hx-get="{% url 'planificacion_list' %}"
+            hx-target="#main-content"
+            @click="activeTab = 'planificaciones'; sidebarOpen = false"
+            class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150"
+            :class="activeTab === 'planificaciones' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
+          >
+            Planificaciones
           </a>
         </nav>
       </div>
