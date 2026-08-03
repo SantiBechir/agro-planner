@@ -1,196 +1,446 @@
 <div class="space-y-8 max-w-7xl mx-auto" x-data="{ showModal: false }">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-        <div class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit">
-            <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">Cultivos Disponibles</h1>
-            <p class="mt-1 text-sm text-slate-600 font-medium">Catálogo de semillas y barbechos con sus ventanas temporales y parámetros agrónomos.</p>
-        </div>
+  <!-- Header -->
+  <div
+    class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0"
+  >
+    <div
+      class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit"
+    >
+      <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">
+        Cultivos Disponibles
+      </h1>
+      <p class="mt-1 text-sm text-slate-600 font-medium">
+        Catálogo de semillas y barbechos con sus ventanas temporales y
+        parámetros agrónomos.
+      </p>
+    </div>
+    <div>
+      <button
+        @click="showModal = true"
+        class="px-5 py-3 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition-all duration-300 shadow-md shadow-emerald-700/10 transform hover:scale-[1.01]"
+      >
+        + Agregar Cultivo
+      </button>
+    </div>
+  </div>
+
+  <!-- Mensajes -->
+  {% if messages %}
+  <div class="space-y-2">
+    {% for message in messages %}
+    <div
+      class="p-4 rounded-xl border {% if message.tags == 'error' %}bg-red-50 border-red-200 text-red-800{% else %}bg-emerald-50 border-emerald-200 text-[#2f5e31]{% endif %} text-sm font-semibold flex items-center justify-between"
+    >
+      <span>{{ message.message }}</span>
+      <button
+        class="text-xs font-bold uppercase tracking-wider ml-4 text-slate-400 hover:text-slate-600 transition"
+        onclick="this.parentElement.remove()"
+      >
+        Cerrar
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Grid de Cultivos (Light Theme) -->
+  <div
+    class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+  >
+    {% for cultivo in cultivos %}
+    <!-- Card Cultivo -->
+    <div
+      class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-5 hover:border-[#4d8b4f]/30 hover:bg-white transition-all duration-300 relative group overflow-hidden"
+    >
+      <!-- Glowing agricultural accent inside card -->
+      <div
+        class="absolute top-0 right-0 h-20 w-20 rounded-full bg-teal-500/5 blur-2xl group-hover:bg-teal-500/10 transition-all duration-300"
+      ></div>
+
+      <!-- Cabecera -->
+      <div class="flex items-start justify-between">
         <div>
-            <button @click="showModal = true" class="px-5 py-3 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition-all duration-300 shadow-md shadow-emerald-700/10 transform hover:scale-[1.01]">
-                + Agregar Cultivo
-            </button>
+          <h3
+            class="text-lg font-bold text-[#2f5e31] group-hover:scale-[1.01] transition duration-300"
+          >
+            {{ cultivo.codigo }}
+          </h3>
+          <p
+            class="text-[9px] text-slate-400 font-bold tracking-wider uppercase mt-0.5"
+          >
+            ID: {{ cultivo.id }}
+          </p>
         </div>
+
+        <!-- Badge de Tipo de cultivo -->
+        {% if cultivo.tipo == 'principal' %}
+        <span
+          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-[#4d8b4f] border border-emerald-200"
+        >
+          Principal
+        </span>
+        {% elif cultivo.tipo == 'secundario' %}
+        <span
+          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"
+        >
+          Secundario
+        </span>
+        {% else %}
+        <span
+          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200"
+        >
+          Otro / Barbecho
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- Rendimientos por Tipo de Suelo -->
+      <div class="mt-5 space-y-1.5">
+        <p
+          class="text-[10px] font-bold text-slate-500 tracking-wider uppercase"
+        >
+          Rendimiento por Suelo
+        </p>
+        <div class="grid grid-cols-3 gap-2">
+          {% for rend in cultivo.rendimientos %}
+          <div
+            class="bg-emerald-50/50 border border-emerald-500/10 rounded-xl p-2 text-center shadow-sm"
+          >
+            <span class="block text-[9px] font-bold text-slate-500"
+              >Suelo {{ rend.suelo }}</span
+            >
+            <span class="text-sm font-extrabold text-[#2f5e31]"
+              >{{ rend.valor|floatformat:1 }}
+              <span class="text-[9px] font-bold">t/ha</span></span
+            >
+          </div>
+          {% empty %}
+          <div class="col-span-3 text-xs text-slate-400 italic py-1">
+            Sin datos
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Separador -->
+      <div class="my-4 border-t border-slate-200/50"></div>
+
+      <!-- Ventana de Siembra (st_start - st_end) -->
+      <div class="space-y-2">
+        <div class="flex justify-between text-xs font-semibold text-slate-600">
+          <span>Ventana Siembra:</span>
+          <span class="text-[#2f5e31]">{{ cultivo.siembra_inicio_fecha }} al {{ cultivo.siembra_fin_fecha }}</span>
+        </div>
+        <div
+          class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200 relative"
+        >
+          <!-- Progress bar indicating sowing window in a 365-day cycle -->
+          <div
+            class="bg-gradient-to-r from-emerald-500 to-green-400 h-2 rounded-full"
+            x-data="{ startPct: {{ cultivo.siembra_inicio_pct|floatformat:4 }}, endPct: {{ cultivo.siembra_fin_pct|floatformat:4 }} }"
+            :style="'margin-left: ' + startPct + '%; width: ' + endPct + '%;'"
+          ></div>
+        </div>
+      </div>
+
+      <!-- No repetir sin intermedio (i_ns) badge if True -->
+      {% if cultivo.no_repetir_sin_intermedio %}
+      <div
+        class="mt-4 flex items-center space-x-1.5 text-amber-800 bg-amber-50 border border-amber-200 p-2 rounded-xl text-[10px] font-semibold leading-normal"
+      >
+        <svg
+          class="h-4 w-4 flex-shrink-0 text-amber-600"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2.5"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+          />
+        </svg>
+        <span>No repetir 2 años consecutivos</span>
+      </div>
+      {% endif %}
     </div>
-
-    <!-- Mensajes -->
-    {% if messages %}
-    <div class="space-y-2">
-        {% for message in messages %}
-        <div class="p-4 rounded-xl border {% if message.tags == 'error' %}bg-red-50 border-red-200 text-red-800{% else %}bg-emerald-50 border-emerald-200 text-[#2f5e31]{% endif %} text-sm font-semibold flex items-center justify-between">
-            <span>{{ message.message }}</span>
-            <button class="text-xs font-bold uppercase tracking-wider ml-4 text-slate-400 hover:text-slate-600 transition" onclick="this.parentElement.remove()">Cerrar</button>
-        </div>
-        {% endfor %}
+    {% empty %}
+    <div
+      class="col-span-full text-center py-12 bg-white/80 border border-dashed border-emerald-500/20 rounded-2xl shadow-sm"
+    >
+      <svg
+        class="mx-auto h-12 w-12 text-[#4d8b4f]"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+        />
+      </svg>
+      <h3 class="mt-2 text-sm font-bold text-[#2f5e31]">No hay cultivos</h3>
+      <p class="mt-1 text-xs text-slate-500">
+        Los cultivos se cargarán automáticamente al importar el Excel en staging
+        o local.
+      </p>
     </div>
-    {% endif %}
+    {% endfor %}
+  </div>
 
-    <!-- Grid de Cultivos (Light Theme) -->
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {% for cultivo in cultivos %}
-        <!-- Card Cultivo -->
-        <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-5 hover:border-[#4d8b4f]/30 hover:bg-white transition-all duration-300 relative group overflow-hidden">
-            <!-- Glowing agricultural accent inside card -->
-            <div class="absolute top-0 right-0 h-20 w-20 rounded-full bg-teal-500/5 blur-2xl group-hover:bg-teal-500/10 transition-all duration-300"></div>
+  <!-- Modal de Agregar Cultivo -->
+  <div
+    x-show="showModal"
+    x-data="{
+      yieldUnit: 't',
+      toggleYieldUnit(nextUnit) {
+        if (this.yieldUnit === nextUnit) return;
 
-            <!-- Cabecera -->
-            <div class="flex items-start justify-between">
-                <div>
-                    <h3 class="text-lg font-bold text-[#2f5e31] group-hover:scale-[1.01] transition duration-300">{{ cultivo.codigo }}</h3>
-                    <p class="text-[9px] text-slate-400 font-bold tracking-wider uppercase mt-0.5">ID: {{ cultivo.id }}</p>
-                </div>
+        this.$el.querySelectorAll('[data-yield-input]').forEach((input) => {
+          if (!input.value) return;
 
-                <!-- Badge de Tipo de cultivo -->
-                {% if cultivo.tipo == 'principal' %}
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-[#4d8b4f] border border-emerald-200">
-                    Principal
-                </span>
-                {% elif cultivo.tipo == 'secundario' %}
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                    Secundario
-                </span>
-                {% else %}
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                    Otro / Barbecho
-                </span>
-                {% endif %}
-            </div>
+          const value = parseFloat(input.value);
+          if (Number.isNaN(value)) return;
 
-            <!-- Rendimientos por Tipo de Suelo -->
-            <div class="mt-5 space-y-1.5">
-                <p class="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Rendimiento por Suelo</p>
-                <div class="grid grid-cols-3 gap-2">
-                    {% for rend in cultivo.rendimientos %}
-                    <div class="bg-emerald-50/50 border border-emerald-500/10 rounded-xl p-2 text-center shadow-sm">
-                        <span class="block text-[9px] font-bold text-slate-500">Suelo {{ rend.suelo }}</span>
-                        <span class="text-sm font-extrabold text-[#2f5e31]">{{ rend.valor|floatformat:1 }} <span class="text-[9px] font-bold">t/ha</span></span>
-                    </div>
-                    {% empty %}
-                    <div class="col-span-3 text-xs text-slate-400 italic py-1">Sin datos</div>
-                    {% endfor %}
-                </div>
-            </div>
+          input.value = nextUnit === 'kg'
+            ? (value * 1000).toFixed(0)
+            : (value / 1000).toFixed(3);
+        });
 
-            <!-- Separador -->
-            <div class="my-4 border-t border-slate-200/50"></div>
+        this.yieldUnit = nextUnit;
+      },
+      normalizeYieldInputs() {
+        if (this.yieldUnit !== 'kg') return;
 
-            <!-- Ventana de Siembra (st_start - st_end) -->
-            <div class="space-y-2">
-                <div class="flex justify-between text-xs font-semibold text-slate-600">
-                    <span>Ventana Siembra:</span>
-                    <span class="text-[#2f5e31]">{{ cultivo.siembra_inicio_fecha }} al {{ cultivo.siembra_fin_fecha }}</span>
-                </div>
-                <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200 relative">
-                    <!-- Progress bar indicating sowing window in a 365-day cycle -->
-                    <div class="bg-gradient-to-r from-emerald-500 to-green-400 h-2 rounded-full"
-                         style="margin-left: {% widthratio cultivo.siembra_inicio 365 100 %}%; width: {% widthratio cultivo.siembra_fin|add:1 365 100 %}%;"></div>
-                </div>
-            </div>
+        this.$el.querySelectorAll('[data-yield-input]').forEach((input) => {
+          if (!input.value) return;
 
-            <!-- No repetir sin intermedio (i_ns) badge if True -->
-            {% if cultivo.no_repetir_sin_intermedio %}
-            <div class="mt-4 flex items-center space-x-1.5 text-amber-800 bg-amber-50 border border-amber-200 p-2 rounded-xl text-[10px] font-semibold leading-normal">
-                <svg class="h-4 w-4 flex-shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span>No repetir en 2 años</span>
-            </div>
-            {% endif %}
-        </div>
-        {% empty %}
-        <div class="col-span-full text-center py-12 bg-white/80 border border-dashed border-emerald-500/20 rounded-2xl shadow-sm">
-            <svg class="mx-auto h-12 w-12 text-[#4d8b4f]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          const value = parseFloat(input.value);
+          if (Number.isNaN(value)) return;
+
+          input.value = (value / 1000).toFixed(3);
+        });
+      }
+    }"
+    class="fixed inset-0 z-50 overflow-y-auto"
+    style="display: none"
+  >
+    <!-- Fondo oscuro -->
+    <div
+      class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+    ></div>
+
+    <!-- Contenedor del Modal -->
+    <div class="flex min-h-full items-center justify-center p-4 text-center">
+      <div
+        @click.away="showModal = false"
+        class="relative transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-emerald-500/10"
+      >
+        <div
+          class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4"
+        >
+          <h3 class="text-lg font-bold text-[#2f5e31]">
+            Agregar Nuevo Cultivo
+          </h3>
+          <button
+            type="button"
+            @click="showModal = false"
+            class="text-slate-400 hover:text-slate-600 transition"
+          >
+            <svg
+              class="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
-            <h3 class="mt-2 text-sm font-bold text-[#2f5e31]">No hay cultivos</h3>
-            <p class="mt-1 text-xs text-slate-500">Los cultivos se cargarán automáticamente al importar el Excel en staging o local.</p>
+          </button>
         </div>
-        {% endfor %}
-    </div>
 
-    <!-- Modal de Agregar Cultivo -->
-    <div x-show="showModal" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
-        <!-- Fondo oscuro -->
-        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
-
-        <!-- Contenedor del Modal -->
-        <div class="flex min-h-full items-center justify-center p-4 text-center">
-            <div @click.away="showModal = false" class="relative transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-emerald-500/10">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
-                    <h3 class="text-lg font-bold text-[#2f5e31]">Agregar Nuevo Cultivo</h3>
-                    <button @click="showModal = false" class="text-slate-400 hover:text-slate-600 transition">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-
-                <form hx-post="{% url 'cultivo_create' %}" hx-target="#main-content" @submit="showModal = false" class="space-y-4">
-                    {% csrf_token %}
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Código del Cultivo</label>
-                            <input type="text" name="codigo" required placeholder="Ej: CEBADA" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nombre</label>
-                            <input type="text" name="nombre" required placeholder="Ej: Cebada Forrajera" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipo de Cultivo</label>
-                            <select name="tipo" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                                <option value="principal" selected>Principal</option>
-                                <option value="secundario">Secundario</option>
-                                <option value="otro">Otro / Barbecho</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Días de Ciclo</label>
-                            <input type="number" name="duracion_dias" required placeholder="Ej: 120" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Siembra Inicio (Fecha)</label>
-                            <input type="date" name="siembra_inicio_fecha" min="{{ min_date }}" max="{{ max_date }}" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Siembra Fin (Fecha)</label>
-                            <input type="date" name="siembra_fin_fecha" min="{{ min_date }}" max="{{ max_date }}" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                        </div>
-                    </div>
-
-                    <div class="flex items-center space-x-2">
-                        <input type="checkbox" id="no_repetir_sin_intermedio" name="no_repetir_sin_intermedio" class="rounded border-slate-300 text-[#4d8b4f] focus:ring-[#4d8b4f]">
-                        <label for="no_repetir_sin_intermedio" class="text-xs font-bold text-slate-500 uppercase tracking-wider">No repetir en años consecutivos</label>
-                    </div>
-
-                    <!-- Rendimientos estimados por tipo de suelo -->
-                    <div class="border-t border-slate-200 pt-3">
-                        <p class="text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider">Rendimientos estimados por suelo</p>
-                        <div class="grid grid-cols-3 gap-3">
-                            {% for suelo in tipos_suelo %}
-                            <div>
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{{ suelo.nombre }} (t/ha)</label>
-                                <input type="number" step="0.1" name="rendimiento_{{ suelo.id }}" required placeholder="0.0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                        <button type="button" @click="showModal = false" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition">
-                            Cancelar
-                        </button>
-                        <button type="submit" class="px-5 py-2 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">
-                            Guardar Cultivo
-                        </button>
-                    </div>
-                </form>
+        <form
+          hx-post="{% url 'cultivo_create' %}"
+          hx-target="#main-content"
+          @submit="normalizeYieldInputs(); showModal = false"
+          class="space-y-4"
+        >
+          {% csrf_token %}
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label
+                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+                >Código del Cultivo</label
+              >
+              <input
+                type="text"
+                name="codigo"
+                required
+                placeholder="Ej: CEBADA"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
+              />
             </div>
-        </div>
+            <div>
+              <label
+                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+                >Nombre</label
+              >
+              <input
+                type="text"
+                name="nombre"
+                required
+                placeholder="Ej: Cebada Forrajera"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label
+                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+                >Tipo de Cultivo</label
+              >
+              <select
+                name="tipo"
+                required
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
+              >
+                <option value="principal" selected>Principal</option>
+                <option value="secundario">Secundario</option>
+                <option value="otro">Otro / Barbecho</option>
+              </select>
+            </div>
+            <div>
+              <label
+                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+                >Días de Ciclo</label
+              >
+              <input
+                type="number"
+                name="duracion_dias"
+                required
+                placeholder="Ej: 120"
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label
+                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+                >Siembra Inicio (Fecha)</label
+              >
+              <input
+                type="date"
+                name="siembra_inicio_fecha"
+                min="{{ min_date }}"
+                max="{{ max_date }}"
+                required
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
+              />
+            </div>
+            <div>
+              <label
+                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+                >Siembra Fin (Fecha)</label
+              >
+              <input
+                type="date"
+                name="siembra_fin_fecha"
+                min="{{ min_date }}"
+                max="{{ max_date }}"
+                required
+                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
+              />
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="no_repetir_sin_intermedio"
+              name="no_repetir_sin_intermedio"
+              class="rounded border-slate-300 text-[#4d8b4f] focus:ring-[#4d8b4f]"
+            />
+            <label
+              for="no_repetir_sin_intermedio"
+              class="text-xs font-bold text-slate-500 uppercase tracking-wider"
+              >No repetir en años consecutivos</label
+            >
+          </div>
+
+          <!-- Rendimientos estimados por tipo de suelo -->
+          <div class="border-t border-slate-200 pt-3">
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <p class="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                Rendimientos estimados por suelo
+              </p>
+              <div class="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 shadow-sm">
+                <button
+                  type="button"
+                  @click="toggleYieldUnit('t')"
+                  :class="yieldUnit === 't' ? 'bg-[#4d8b4f] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+                  class="px-3 py-1.5 rounded-md text-xs font-bold transition"
+                >
+                  t
+                </button>
+                <button
+                  type="button"
+                  @click="toggleYieldUnit('kg')"
+                  :class="yieldUnit === 'kg' ? 'bg-[#4d8b4f] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+                  class="px-3 py-1.5 rounded-md text-xs font-bold transition"
+                >
+                  kg
+                </button>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              {% for suelo in tipos_suelo %}
+              <div>
+                <label
+                  class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5"
+                  >{{ suelo.nombre }} (<span x-text="yieldUnit === 'kg' ? 'kg/ha' : 't/ha'"></span>)</label
+                >
+                <input
+                  type="number"
+                  step="0.001"
+                  name="rendimiento_{{ suelo.id }}"
+                  data-yield-input
+                  required
+                  placeholder="0.0"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
+                />
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+            <button
+              type="button"
+              @click="showModal = false"
+              class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="px-5 py-2 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10"
+            >
+              Guardar Cultivo
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
+  </div>
 </div>

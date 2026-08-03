@@ -1,0 +1,145 @@
+{% load l10n %}
+<div class="space-y-8 max-w-7xl mx-auto">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+        <div class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit">
+            <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">Precios y Costos</h1>
+            <p class="mt-1 text-sm text-slate-600 font-medium">Valores que sirven como datos de entrada para la planificación.</p>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="p-4 rounded-xl border {% if message.tags == 'error' %}bg-red-50 border-red-200 text-red-800{% else %}bg-emerald-50 border-emerald-200 text-[#2f5e31]{% endif %} text-sm font-semibold flex items-center justify-between">
+            <span>{{ message.message }}</span>
+            <button class="text-xs font-bold uppercase tracking-wider ml-4 text-slate-400 hover:text-slate-600 transition" onclick="this.parentElement.remove()">Cerrar</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if selected_cultivo_obj and not selected_cultivo_obj.habilitado_optimizacion %}
+    <div class="p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-900 text-sm font-semibold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <span>{{ selected_cultivo_obj.codigo }} no participa en la optimización. Faltan revisar {{ costos_pendientes }} valores.</span>
+        <span class="text-xs font-bold uppercase tracking-wider">Cultivo en borrador</span>
+    </div>
+    {% endif %}
+
+    <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-5">
+        <form hx-get="{% url 'costo_list' %}" hx-target="#main-content" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipo</label>
+                <select name="tipo" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                    <option value="">Todos</option>
+                    {% for tipo in tipos_costo %}
+                    <option value="{{ tipo.id }}" {% if selected_tipo == tipo.id|stringformat:"s" %}selected{% endif %}>{{ tipo.descripcion_mostrar }} </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Campaña</label>
+                <select name="campania" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                    <option value="">Todas</option>
+                    {% for campania in campanias %}
+                    <option value="{{ campania.id }}" {% if selected_campania == campania.id|stringformat:"s" %}selected{% endif %}>{{ campania.nombre_mostrar }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cultivo</label>
+                <select name="cultivo" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                    <option value="">Todos</option>
+                    {% for cultivo in cultivos %}
+                    <option value="{{ cultivo.id }}" {% if selected_cultivo == cultivo.id|stringformat:"s" %}selected{% endif %}>{{ cultivo.codigo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex gap-3">
+                <button type="submit" class="px-5 py-2.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">
+                    Filtrar
+                </button>
+                <button type="button" hx-get="{% url 'costo_list' %}" hx-target="#main-content" class="px-5 py-2.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-sm transition">
+                    Limpiar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <form hx-post="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}" hx-target="#main-content" class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-hidden">
+        {% csrf_token %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-emerald-50/80">
+                    <tr>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cultivo</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Campaña</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Lote</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valor</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Unidad</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for costo in costos %}
+                    <tr class="{% if not costo.configurado %}bg-amber-50/50{% endif %} hover:bg-emerald-50/40 transition">
+                        <td class="px-5 py-3 whitespace-nowrap">
+                            <div class="text-sm font-bold text-slate-700">
+                                {{ costo.tipo_costo.descripcion_mostrar }}
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-sm font-bold text-slate-700 whitespace-nowrap">{{ costo.cultivo.codigo }}</td>
+                        <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.campania_mostrar }}</td>
+                        <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.lote.codigo|default:"Todos" }}</td>
+                        <td class="px-5 py-3 whitespace-nowrap">
+                            <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                            {% if not costo.configurado %}
+                            <span class="ml-2 text-[9px] font-bold uppercase tracking-wider text-amber-700">Pendiente</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{{ costo.tipo_costo.unidad|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay precios o costos para los filtros seleccionados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <p class="text-xs text-slate-500 font-semibold">
+                    Mostrando {{ page_obj.start_index }}-{{ page_obj.end_index }} de {{ paginator.count }} valores. Los cambios se usarán en la próxima optimización que ejecutes.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                <button type="submit" name="action" value="save" class="px-5 py-2.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">
+                    Guardar Cambios
+                </button>
+                {% if selected_cultivo_obj and not selected_cultivo_obj.habilitado_optimizacion %}
+                <button type="submit" name="action" value="enable" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition shadow-md">
+                    Guardar y Habilitar
+                </button>
+                {% endif %}
+                </div>
+            </div>
+
+            {% if page_obj.has_other_pages %}
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-200 pt-4">
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Página {{ page_obj.number }} de {{ paginator.num_pages }}</p>
+                <div class="flex flex-wrap gap-2">
+                    {% if page_obj.has_previous %}
+                    <button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.previous_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Anterior
+                    </button>
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                    <button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.next_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Siguiente
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </form>
+</div>

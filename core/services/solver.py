@@ -38,36 +38,38 @@ def run_optimization(planificacion_id):
 
         tc_dict = data["tc_dict"]
         model.tc = pyo.Set(model.c, within=model.t, initialize=tc_dict)
-        model.t_to_c = pyo.Param(model.t, initialize={slot: camp for camp in data["c"] for slot in tc_dict[camp]})
+        model.t_to_c = pyo.Param(model.t, initialize={slot: camp for camp in data["c"] for slot in tc_dict[camp]}, within=pyo.Any)
 
         # ---- PARAMETERS ----
         model.ha = pyo.Param(model.j, initialize=data["ha"])
         model.max_m = pyo.Param(model.j, initialize=data["max_m"])
         model.max_s = pyo.Param(model.j, initialize=data["max_s"])
-        model.sueloj = pyo.Param(model.j, initialize=data["sueloj"])
+        model.sueloj = pyo.Param(model.j, initialize=data["sueloj"], within=pyo.Any)
 
-        model.fsp = pyo.Param(model.i, model.c, initialize=data["fsp_dict"], default=0.0)
-        model.sc = pyo.Param(model.i, model.c, initialize=data["sc_dict"], default=0.0)
-        model.hc = pyo.Param(model.i, model.c, initialize=data["hc_dict"], default=0.0)
-        model.frc = pyo.Param(model.i, model.j, model.c, initialize=data["frc_dict"], default=0.0)
-        model.vr = pyo.Param(model.i, model.j, model.c, initialize=data["vr_dict"], default=0.0)
-        model.tf = pyo.Param(model.i, initialize=data["tf_dict"], default=0.0)
-        model.scp = pyo.Param(model.i, initialize=data["scp_dict"], default=0.0)
-        model.cp = pyo.Param(model.i, model.c, initialize=data["cp_dict"], default=0.0)
-        model.st = pyo.Param(model.i, initialize=data["st_dict"], default=0.0)
-        model.cst = pyo.Param(model.i, model.c, initialize=data["cst_dict"], default=0.0)
-        model.clt = pyo.Param(model.i, model.c, initialize=data["clt_dict"], default=0.0)
+        # Costos y parámetros sparse: se usan funciones de lookup con default
+        # para evitar errores cuando una combinación no existe en la base de datos.
+        model.fsp = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["fsp_dict"].get((i, c), 0.0))
+        model.sc = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["sc_dict"].get((i, c), 0.0))
+        model.hc = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["hc_dict"].get((i, c), 0.0))
+        model.frc = pyo.Param(model.i, model.j, model.c, initialize=lambda m, i, j, c: data["frc_dict"].get((i, j, c), 0.0))
+        model.vr = pyo.Param(model.i, model.j, model.c, initialize=lambda m, i, j, c: data["vr_dict"].get((i, j, c), 0.0))
+        model.tf = pyo.Param(model.i, initialize=lambda m, i: data["tf_dict"].get(i, 0.0))
+        model.scp = pyo.Param(model.i, initialize=lambda m, i: data["scp_dict"].get(i, 0.0))
+        model.cp = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["cp_dict"].get((i, c), 0.0))
+        model.st = pyo.Param(model.i, initialize=lambda m, i: data["st_dict"].get(i, 0.0))
+        model.cst = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["cst_dict"].get((i, c), 0.0))
+        model.clt = pyo.Param(model.i, model.c, initialize=lambda m, i, c: data["clt_dict"].get((i, c), 0.0))
         model.gt = pyo.Param(model.i, initialize=data["gt"], default=0)
         model.st_start = pyo.Param(model.i, initialize=data["st_start"], default=0)
         model.st_end = pyo.Param(model.i, initialize=data["st_end"], default=365)
 
-        model.setup = pyo.Param(model.i, model.i, initialize=data["setup_dict"], default=0.0)
-        model.ar = pyo.Param(model.i, model.i, initialize=data["ar_dict"], mutable=True, default=1)
-        model.sueloi = pyo.Param(model.i, model.s, initialize=data["sueloi_dict"], default=1)
-        model.xh = pyo.Param(model.i, model.j, model.ch, initialize=data["xh_dict"], default=0)
-        model.alfa = pyo.Param(model.l, initialize=data["alfa_dict"], default=0.0)
-        model.ymax = pyo.Param(model.s, model.i, initialize=data["y_max_dict"], default=0.0)
-        model.red = pyo.Param(model.i, model.i, initialize=data["red_dict"], default=0.0)
+        model.setup = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["setup_dict"].get((i1, i2), 0.0))
+        model.ar = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["ar_dict"].get((i1, i2), 1), mutable=True)
+        model.sueloi = pyo.Param(model.i, model.s, initialize=lambda m, i, s: data["sueloi_dict"].get((i, s), 1))
+        model.xh = pyo.Param(model.i, model.j, model.ch, initialize=lambda m, i, j, ch: data["xh_dict"].get((i, j, ch), 0))
+        model.alfa = pyo.Param(model.l, initialize=lambda m, l: data["alfa_dict"].get(l, 0.0))
+        model.ymax = pyo.Param(model.s, model.i, initialize=lambda m, s, i: data["y_max_dict"].get((s, i), 0.0))
+        model.red = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["red_dict"].get((i1, i2), 0.0))
         model.ord = pyo.Param(model.c, initialize=data["ord_dict"])
         model.lag = pyo.Param(model.l, initialize={'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3, 'L4': 4, 'L5': 5})
 
@@ -262,19 +264,19 @@ def run_optimization(planificacion_id):
         model.yield3 = pyo.Constraint(model.i, model.j, model.t, rule=yield3)
 
         # ---- SOLVER ----
-        try:
-            opt = pyo.SolverFactory('appsi_highs')
-            time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
-            if time_limit_raw:
-                opt.config.time_limit = int(time_limit_raw)
-            mip_gap_raw = config('SOLVER_MIP_GAP', default='')
-            if mip_gap_raw:
-                opt.config.mip_gap = float(mip_gap_raw)
-            results = opt.solve(model, tee=False)
-        except Exception:
-            # Fallback a GLPK
-            opt = pyo.SolverFactory('glpk')
-            results = opt.solve(model, tee=False)
+        opt = pyo.SolverFactory('highs')
+        opt.options['mip_rel_gap'] = 0.05
+        opt.options['threads'] = 0
+        opt.options['presolve'] = 'on'
+        opt.options['parallel'] = 'on'
+
+        time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
+        if time_limit_raw:
+            opt.options['time_limit'] = float(time_limit_raw)
+        mip_gap_raw = config('SOLVER_MIP_GAP', default='')
+        if mip_gap_raw:
+            opt.options['mip_rel_gap'] = float(mip_gap_raw)
+        results = opt.solve(model, tee=False)
 
         # 3. Guardar resultados
         if results.solver.status == pyo.SolverStatus.ok and results.solver.termination_condition == pyo.TerminationCondition.optimal:
@@ -314,27 +316,18 @@ def run_optimization(planificacion_id):
                         rendimiento_ind = ymax_val * lote.superficie_ha * z_val
 
                         fsp_val = data["fsp_dict"].get((cultivo.codigo, camp_code), 0)
-                        ingreso_ind = fsp_val * rendimiento_ind
+                        ingreso_ind = fsp_val * ymax_val * z_val
 
                         sc_val = data["sc_dict"].get((cultivo.codigo, camp_code), 0)
                         hc_val = data["hc_dict"].get((cultivo.codigo, camp_code), 0)
                         frc_val = data["frc_dict"].get((cultivo.codigo, lote.codigo, camp_code), 0)
                         vr_val = data["vr_dict"].get((cultivo.codigo, lote.codigo, camp_code), 0)
-                        tf_val = data["tf_dict"].get(cultivo.codigo, 0)
-                        scp_val = data["scp_dict"].get(cultivo.codigo, 0)
-                        cp_val = data["cp_dict"].get((cultivo.codigo, camp_code), 0)
-                        st_val = data["st_dict"].get(cultivo.codigo, 0)
-                        cst_val = data["cst_dict"].get((cultivo.codigo, camp_code), 0)
-                        clt_val = data["clt_dict"].get((cultivo.codigo, camp_code), 0)
-
-                        sowing_c = sc_val * lote.superficie_ha
-                        harvesting_c = hc_val * lote.superficie_ha
-                        rental_c = frc_val + fsp_val * vr_val * rendimiento_ind
-                        post_harvest_c = (tf_val * fsp_val * rendimiento_ind +
-                                          scp_val * cp_val * rendimiento_ind +
-                                          (st_val * cst_val + (1 - st_val) * clt_val) * rendimiento_ind)
-
-                        costo_ind = sowing_c + harvesting_c + rental_c + post_harvest_c
+                        costo_ind = (
+                            sc_val
+                            + hc_val
+                            + frc_val / lote.superficie_ha
+                            + fsp_val * vr_val * z_val * ymax_val
+                        )
 
                         AsignacionLoteSlot.objects.create(
                             planificacion=planificacion,

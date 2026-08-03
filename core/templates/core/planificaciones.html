@@ -1,152 +1,266 @@
 <div class="space-y-8 max-w-7xl mx-auto">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-        <div class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit">
-            <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">Optimización de Campaña</h1>
-            <p class="mt-1 text-sm text-slate-600 font-medium">Ejecuta el Solver matemático MILP y analiza los escenarios óptimos de siembra.</p>
+  <!-- Header -->
+  <div
+    class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0"
+  >
+    <div
+      class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit"
+    >
+      <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">
+        Optimización de Campaña
+      </h1>
+      <p class="mt-1 text-sm text-slate-600 font-medium">
+        Tomando los datos previamente cargados, planifica las campañas
+        agrícolas.
+      </p>
+    </div>
+  </div>
+
+  <!-- Grid de Acción Principal e Indicador de Carga (Light Theme) -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Panel de control de corrida (Light Card) -->
+    <div
+      class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-6 lg:col-span-1 h-fit relative overflow-hidden group"
+    >
+      <div
+        class="absolute top-0 right-0 h-24 w-24 rounded-full bg-emerald-500/5 blur-2xl group-hover:bg-emerald-500/10 transition-all duration-300"
+      ></div>
+
+      <h2 class="text-lg font-bold text-[#2f5e31] mb-4">Nueva Planificación</h2>
+
+      <form
+        hx-post="{% url 'ejecutar_optimizacion' %}"
+        hx-target="#main-content"
+        hx-indicator="#loading-spinner"
+        class="space-y-5"
+      >
+        {% csrf_token %}
+        <div>
+          <label
+            for="nombre"
+            class="block text-xs font-bold text-slate-500 uppercase tracking-wider"
+            >Nombre</label
+          >
+          <input
+            type="text"
+            name="nombre"
+            id="nombre"
+            required
+            class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder-slate-400 focus:border-[#4d8b4f] focus:outline-none focus:ring-1 focus:ring-[#4d8b4f] text-sm transition duration-200"
+            value="Planificación Campaña {% now 'Y' %}"
+          />
         </div>
+
+        <div>
+          <button
+            type="submit"
+            class="flex w-full justify-center items-center rounded-xl bg-[#4d8b4f] hover:bg-[#3d6f3f] px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-700/15 transition duration-300 transform active:scale-[0.98]"
+          >
+            <svg
+              class="mr-2 h-5 w-5 text-white animate-pulse"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
+            </svg>
+            Ejecutar
+          </button>
+        </div>
+      </form>
     </div>
 
-    <!-- Grid de Acción Principal e Indicador de Carga (Light Theme) -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Panel de control de corrida (Light Card) -->
-        <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-6 lg:col-span-1 h-fit relative overflow-hidden group">
-            <div class="absolute top-0 right-0 h-24 w-24 rounded-full bg-emerald-500/5 blur-2xl group-hover:bg-emerald-500/10 transition-all duration-300"></div>
-            
-            <h2 class="text-lg font-bold text-[#2f5e31] mb-4">Nueva Optimización</h2>
-            
-            <form hx-post="{% url 'ejecutar_optimizacion' %}" 
-                  hx-target="#main-content" 
-                  hx-indicator="#loading-spinner"
-                  class="space-y-5">
-                {% csrf_token %}
-                <div>
-                    <label for="nombre" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Nombre del escenario</label>
-                    <input type="text" name="nombre" id="nombre" required 
-                           class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder-slate-400 focus:border-[#4d8b4f] focus:outline-none focus:ring-1 focus:ring-[#4d8b4f] text-sm transition duration-200"
-                           value="Planificación Campaña {% now 'Y' %}">
-                </div>
-
-                <div>
-                    <button type="submit" 
-                            class="flex w-full justify-center items-center rounded-xl bg-[#4d8b4f] hover:bg-[#3d6f3f] px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-700/15 transition duration-300 transform active:scale-[0.98]">
-                        <svg class="mr-2 h-5 w-5 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        Ejecutar Solver Pyomo
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Indicador de Carga / Spinner (Light glassmorphic) -->
-        <div id="loading-spinner" class="htmx-indicator backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-8 lg:col-span-2 flex flex-col items-center justify-center space-y-5 min-h-[250px]">
-            <div class="relative flex items-center justify-center">
-                <!-- Outer glowing ring -->
-                <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#4d8b4f]"></div>
-                <!-- Inner pulse circle -->
-                <div class="absolute h-8 w-8 rounded-full bg-emerald-100/80 animate-ping"></div>
-            </div>
-            <div class="text-center space-y-1.5 z-10">
-                <h3 class="text-lg font-bold text-[#2f5e31]">Construyendo el Modelo MILP...</h3>
-                <p class="text-xs font-semibold text-slate-500 max-w-sm leading-relaxed mx-auto">
-                    Django está mapeando los lotes, cultivos e historiales. Pyomo instanciará las ecuaciones matemáticas y llamará al solver de optimización (Gurobi/GLPK) de manera segura. Esto puede demorar unos segundos.
-                </p>
-            </div>
-        </div>
-
-        <!-- Mensaje por defecto cuando no está cargando -->
-        <div id="default-panel" class="backdrop-blur-md bg-white/70 border border-dashed border-emerald-500/20 rounded-2xl p-8 lg:col-span-2 flex flex-col items-center justify-center space-y-4 text-center min-h-[250px]">
-            <div class="p-4 bg-emerald-50 text-[#4d8b4f] rounded-full border border-emerald-100">
-                <svg class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 113.536 3.536L12 21H6.343l.707-.707" />
-                </svg>
-            </div>
-            <div>
-                <h3 class="text-sm font-bold text-[#2f5e31]">Esperando ejecución</h3>
-                <p class="text-xs text-slate-500 font-semibold mt-1 max-w-xs mx-auto">Coloca un nombre a tu escenario y haz clic en "Ejecutar Solver Pyomo" a la izquierda para iniciar la planificación.</p>
-            </div>
-        </div>
+    <!-- Indicador de Carga / Spinner (Light glassmorphic) -->
+    <div
+      id="loading-spinner"
+      class="htmx-indicator backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-8 lg:col-span-2 flex flex-col items-center justify-center space-y-5 min-h-[250px]"
+    >
+      <div class="relative flex items-center justify-center">
+        <!-- Outer glowing ring -->
+        <div
+          class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#4d8b4f]"
+        ></div>
+        <!-- Inner pulse circle -->
+        <div
+          class="absolute h-8 w-8 rounded-full bg-emerald-100/80 animate-ping"
+        ></div>
+      </div>
+      <div class="text-center space-y-1.5 z-10">
+        <h3 class="text-lg font-bold text-[#2f5e31]">
+          Construyendo el Modelo Matemático...
+        </h3>
+      </div>
     </div>
 
-    <!-- Tabla de historial de corridas anteriores (Light table) -->
-    <div class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-hidden">
-        <div class="px-6 py-5 border-b border-slate-200">
-            <h3 class="text-lg font-bold text-[#2f5e31]">Historial de Planificaciones</h3>
-            <p class="text-xs text-slate-500 mt-0.5 font-semibold">Corrida previas guardadas en la base de datos.</p>
-        </div>
-        
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
-                <thead class="bg-slate-50">
-                    <tr>
-                        <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Fecha / Hora</th>
-                        <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nombre del escenario</th>
-                        <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Estado</th>
-                        <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">M. Económico (PROFIT)</th>
-                        <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Intensidad Suelo (ILU)</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200 bg-white/40">
-                    {% for plan in planificaciones %}
-                    <tr class="hover:bg-emerald-50/20 transition duration-150">
-                        <td class="whitespace-nowrap px-6 py-4.5 text-sm text-slate-500 font-semibold">
-                            {{ plan.fecha_creacion|date:"d/m/Y H:i" }}
-                        </td>
-                        <td class="whitespace-nowrap px-6 py-4.5 text-sm font-bold text-slate-800">
-                            {{ plan.nombre }}
-                        </td>
-                        <td class="whitespace-nowrap px-6 py-4.5 text-xs">
-                            {% if plan.estado == 'completado' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-emerald-50 text-[#4d8b4f] border border-emerald-200">
-                                Completado
-                            </span>
-                            {% elif plan.estado == 'pendiente' or plan.estado == 'ejecutando' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
-                                {{ plan.estado|capfirst }}
-                            </span>
-                            {% else %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-red-50 text-red-700 border border-red-200">
-                                Error / Fallido
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td class="whitespace-nowrap px-6 py-4.5 text-sm font-extrabold text-[#4d8b4f]">
-                            {% if plan.profit is not null %}
-                            $ {{ plan.profit|floatformat:2 }} USD
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
-                        <td class="whitespace-nowrap px-6 py-4.5 text-sm text-slate-600 font-bold">
-                            {% if plan.ilu is not null %}
-                            {{ plan.ilu|floatformat:0 }} días de uso
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="px-6 py-12 text-center text-sm text-slate-500 font-medium">
-                            No se han registrado planificaciones en la base de datos todavía.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <!-- Mensaje por defecto cuando no está cargando -->
+    <div
+      id="default-panel"
+      class="backdrop-blur-md bg-white/70 border border-dashed border-emerald-500/20 rounded-2xl p-8 lg:col-span-2 flex flex-col items-center justify-center space-y-4 text-center min-h-[250px]"
+    >
+      <div
+        class="p-4 bg-emerald-50 text-[#4d8b4f] rounded-full border border-emerald-100"
+      >
+        <svg
+          class="h-10 w-10"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 113.536 3.536L12 21H6.343l.707-.707"
+          />
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-[#2f5e31]">Esperando ejecución</h3>
+        <p class="text-xs text-slate-500 font-semibold mt-1 max-w-xs mx-auto">
+          Coloca un nombre y haz clic en "Ejecutar" a la izquierda para iniciar
+          la planificación.
+        </p>
+      </div>
     </div>
+  </div>
+
+  <!-- Tabla de historial de corridas anteriores (Light table) -->
+  <div
+    class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-hidden"
+  >
+    <div class="px-6 py-5 border-b border-slate-200">
+      <h3 class="text-lg font-bold text-[#2f5e31]">
+        Historial de Planificaciones
+      </h3>
+      <p class="text-xs text-slate-500 mt-0.5 font-semibold">
+        Corrida previas guardadas en la base de datos.
+      </p>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200">
+        <thead class="bg-slate-50">
+          <tr>
+            <th
+              scope="col"
+              class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider"
+            >
+              Fecha / Hora
+            </th>
+            <th
+              scope="col"
+              class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider"
+            >
+              Nombre del escenario
+            </th>
+            <th
+              scope="col"
+              class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider"
+            >
+              Estado
+            </th>
+            <th
+              scope="col"
+              class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider"
+            >
+              M. Económico (PROFIT)
+            </th>
+            <th
+              scope="col"
+              class="px-6 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider"
+            >
+              Intensidad Suelo (ILU)
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 bg-white/40">
+          {% for plan in planificaciones %}
+          <tr class="hover:bg-emerald-50/20 transition duration-150">
+            <td
+              class="whitespace-nowrap px-6 py-4.5 text-sm text-slate-500 font-semibold"
+            >
+              {{ plan.fecha_creacion|date:"d/m/Y H:i" }}
+            </td>
+            <td
+              class="whitespace-nowrap px-6 py-4.5 text-sm font-bold text-slate-800"
+            >
+              <a
+                hx-get="{% url 'planificacion_status' plan.id %}"
+                hx-target="#main-content"
+                class="text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+              >
+                {{ plan.nombre }}
+              </a>
+            </td>
+            <td class="whitespace-nowrap px-6 py-4.5 text-xs">
+              {% if plan.estado == 'completado' %}
+              <span
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-emerald-50 text-[#4d8b4f] border border-emerald-200"
+              >
+                Completado
+              </span>
+              {% elif plan.estado == 'pendiente' %}
+              <span
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse"
+              >
+                {{ plan.estado|capfirst }}
+              </span>
+              {% elif plan.estado == 'ejecutando' %}
+              <span
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse"
+              >
+                {{ plan.estado|capfirst }}
+              </span>
+              {% else %}
+              <span
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold bg-red-50 text-red-700 border border-red-200"
+              >
+                Error / Fallido
+              </span>
+              {% endif %}
+            </td>
+            <td
+              class="whitespace-nowrap px-6 py-4.5 text-sm font-extrabold text-[#4d8b4f]"
+            >
+              {% if plan.profit is not null %} $ {{ plan.profit|floatformat:2 }}
+              USD {% else %} - {% endif %}
+            </td>
+            <td
+              class="whitespace-nowrap px-6 py-4.5 text-sm text-slate-600 font-bold"
+            >
+              {% if plan.ilu is not null %} {{ plan.ilu|floatformat:0 }} días de
+              uso {% else %} - {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td
+              colspan="5"
+              class="px-6 py-12 text-center text-sm text-slate-500 font-medium"
+            >
+              No se han registrado planificaciones en la base de datos todavía.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <style>
-    #loading-spinner.htmx-request {
-        display: flex !important;
-    }
-    .htmx-request ~ #default-panel {
-        display: none !important;
-    }
-    #loading-spinner {
-        display: none;
-    }
+  #loading-spinner.htmx-request {
+    display: flex !important;
+  }
+  .htmx-request ~ #default-panel {
+    display: none !important;
+  }
+  #loading-spinner {
+    display: none;
+  }
 </style>
