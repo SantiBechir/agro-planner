@@ -19,6 +19,7 @@ from core.models import (
 )
 from datetime import datetime, timedelta
 import math
+import unicodedata
 
 
 def _build_gantt_data(asignaciones):
@@ -152,11 +153,15 @@ def lote_create(request):
 
 
 @login_required(login_url="login")
-def cultivo_list(request):
-    cultivos = Cultivo.objects.prefetch_related("rendimientocultivosuelo_set__tipo_suelo").order_by("codigo")
-    tipos_suelo = TipoSuelo.objects.all().order_by("codigo")
+def cultivo_list(request, form_data=None, open_modal=False):
+    cultivos = Cultivo.objects.exclude(codigo="BARBECHO").prefetch_related("rendimientocultivosuelo_set__tipo_suelo").order_by("codigo")
+    tipos_suelo = list(TipoSuelo.objects.all().order_by("codigo"))
+    form_data = form_data or {}
     base_year = datetime.now().year
     base_date = datetime(base_year, 6, 1)
+
+    for suelo in tipos_suelo:
+        suelo.form_value = form_data.get(f"rendimiento_{suelo.id}", "")
 
     for cultivo in cultivos:
         # Calcular fechas de inicio y fin asumiendo campaña del 01/06 al 31/05 del año siguiente
@@ -164,6 +169,8 @@ def cultivo_list(request):
         ht_date = base_date + timedelta(days=int(cultivo.siembra_fin) - 1)
         cultivo.siembra_inicio_fecha = st_date.strftime("%d/%m/%Y")
         cultivo.siembra_fin_fecha = ht_date.strftime("%d/%m/%Y")
+        cultivo.siembra_inicio_pct = (int(cultivo.siembra_inicio) / 365) * 100
+        cultivo.siembra_fin_pct = ((int(cultivo.siembra_fin) + 1) / 365) * 100
 
         # Rendimientos por tipo de suelo
         cultivo.rendimientos = [
@@ -185,6 +192,8 @@ def cultivo_list(request):
             "tipos_suelo": tipos_suelo,
             "min_date": min_date,
             "max_date": max_date,
+            "form_data": form_data,
+            "open_modal": open_modal,
         }
     )
 
@@ -192,9 +201,32 @@ def cultivo_list(request):
 @login_required(login_url="login")
 def cultivo_create(request):
     if request.method == "POST":
-        codigo = request.POST.get("codigo")
         nombre = request.POST.get("nombre")
+        form_data = request.POST.dict()
+        form_data["no_repetir_sin_intermedio"] = request.POST.get("no_repetir_sin_intermedio") == "on"
+        codigo = (
+            unicodedata.normalize("NFD", nombre)
+            .encode("ascii", "ignore")
+            .decode("utf-8")
+            .upper()
+            .strip()
+        ) if nombre else ""
         tipo = request.POST.get("tipo")
+        
+        if nombre and Cultivo.objects.filter(nombre__iexact=nombre.strip()).exists():
+            messages.error(
+                request,
+                f"Ya existe un cultivo con el nombre '{nombre}'."
+            )
+            return cultivo_list(request, form_data=form_data, open_modal=True)
+
+        if Cultivo.objects.filter(codigo=codigo).exists():
+            messages.error(
+                request,
+                f"Ya existe un cultivo con el código '{codigo}'."
+            )
+            return cultivo_list(request, form_data=form_data, open_modal=True)
+        
         duracion_dias = request.POST.get("duracion_dias")
         siembra_inicio_fecha_str = request.POST.get("siembra_inicio_fecha")
         siembra_fin_fecha_str = request.POST.get("siembra_fin_fecha")
@@ -213,7 +245,7 @@ def cultivo_create(request):
 
                 if siembra_fin < siembra_inicio:
                     messages.error(request, "La fecha de fin de siembra no puede ser anterior a la de inicio.")
-                    return cultivo_list(request)
+                    return cultivo_list(request, form_data=form_data, open_modal=True)
 
                 from django.db import transaction
                 with transaction.atomic():
@@ -300,8 +332,10 @@ def cultivo_create(request):
                 )
             except Exception as e:
                 messages.error(request, f"Error al crear cultivo: {str(e)}")
+                return cultivo_list(request, form_data=form_data, open_modal=True)
         else:
             messages.error(request, "Todos los campos son obligatorios.")
+            return cultivo_list(request, form_data=form_data, open_modal=True)
 
     return cultivo_list(request)
 
