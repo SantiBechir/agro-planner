@@ -270,6 +270,32 @@ class CostoListDirectTest(TestCase):
         self.assertIn("Página 1 de 8", html)
         self.assertIn("Siguiente", html)
 
+    def test_costo_list_hides_barbecho_in_filter_and_table(self):
+        barbecho = Cultivo.objects.create(
+            codigo="BARBECHO",
+            nombre="Barbecho",
+            tipo=Cultivo.Tipo.OTRO,
+            duracion_dias=30,
+            siembra_inicio=1,
+            siembra_fin=30,
+        )
+        Costo.objects.create(
+            cultivo=barbecho,
+            tipo_costo=self.tipo_costo,
+            campania=self.campania,
+            valor=0,
+        )
+
+        request = self.factory.get("/costos/")
+        request.user = self.user
+
+        response = costo_list(request)
+        self.assertEqual(response.status_code, 200)
+
+        html = response.content.decode("utf-8")
+        self.assertNotIn('option value="%s"' % barbecho.id, html)
+        self.assertNotIn("BARBECHO", html)
+
     def test_enables_crop_after_all_costs_are_reviewed(self):
         self.cultivo.habilitado_optimizacion = False
         self.cultivo.save(update_fields=["habilitado_optimizacion"])

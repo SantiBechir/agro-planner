@@ -3,6 +3,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Avg, Q
 from django.core.paginator import Paginator
 from core.models import (
     Lote,
@@ -340,12 +341,94 @@ def cultivo_create(request):
     return cultivo_list(request)
 
 
+def _build_economic_indicators():
+    """Build per-hectare economic indicators from the configured cost inputs."""
+    barbecho_q = Q(codigo__iexact="BARBECHO") | Q(nombre__iexact="BARBECHO")
+    cultivos = list(
+        Cultivo.objects.exclude(barbecho_q)
+        .annotate(rendimiento_promedio=Avg("rendimientocultivosuelo__valor"))
+        .order_by("codigo")
+    )
+    campanias = list(Campania.objects.order_by("orden"))
+    costos = Costo.objects.filter(cultivo__in=cultivos, lote__isnull=True).select_related(
+        "tipo_costo"
+    )
+    valores = {
+        (costo.cultivo_id, costo.tipo_costo.codigo, costo.campania_id): costo.valor
+        for costo in costos
+    }
+
+    def valor(cultivo, codigo, campania):
+        return valores.get(
+            (cultivo.id, codigo, campania.id),
+            valores.get((cultivo.id, codigo, None), 0),
+        )
+
+    margenes = []
+    indiferencias = []
+    for cultivo in cultivos:
+        rendimiento = cultivo.rendimiento_promedio or 0
+        for campania in campanias:
+            precio = valor(cultivo, "fsp", campania)
+            siembra = valor(cultivo, "sc", campania)
+            cosecha = valor(cultivo, "hc", campania)
+            comision = valor(cultivo, "tf", campania)
+            proporcion_acond = valor(cultivo, "scp", campania)
+            costo_acond = valor(cultivo, "cp", campania)
+            proporcion_flete_corto = valor(cultivo, "st", campania)
+            flete_corto = valor(cultivo, "cst", campania)
+            flete_largo = valor(cultivo, "clt", campania)
+
+            ingreso = precio * rendimiento
+            transporte_por_ton = (
+                proporcion_flete_corto * flete_corto
+                + (1 - proporcion_flete_corto) * flete_largo
+            )
+            costo_variable_por_ton = (
+                precio * comision
+                + proporcion_acond * costo_acond
+                + transporte_por_ton
+            )
+            costos_directos = siembra + cosecha + rendimiento * costo_variable_por_ton
+            precio_neto_por_ton = precio - costo_variable_por_ton
+            margen = ingreso - costos_directos
+            rendimiento_indiferencia = (
+                (siembra + cosecha) / precio_neto_por_ton
+                if precio_neto_por_ton > 0
+                else None
+            )
+            etiqueta_campania = f"{2025 + campania.orden - 1}/{2026 + campania.orden - 1}"
+            base = {
+                "cultivo": cultivo.codigo,
+                "campania": etiqueta_campania,
+                "rendimiento_promedio": rendimiento,
+                "precio": precio,
+            }
+            margenes.append({
+                **base,
+                "ingreso": ingreso,
+                "costos_directos": costos_directos,
+                "margen": margen,
+            })
+            indiferencias.append({
+                **base,
+                "costos_fijos": siembra + cosecha,
+                "precio_neto": precio_neto_por_ton,
+                "rendimiento_indiferencia": rendimiento_indiferencia,
+            })
+    return margenes, indiferencias
+
+
 @login_required(login_url="login")
 def costo_list(request):
+    selected_tab = request.GET.get("tab", "detalle")
+    if selected_tab not in {"margenes", "indiferencia", "detalle"}:
+        selected_tab = "detalle"
     selected_tipo = request.GET.get("tipo", "")
     selected_campania = request.GET.get("campania", "")
     selected_cultivo = request.GET.get("cultivo", "")
     selected_page = request.GET.get("page", "1")
+    selected_arrendamiento_page = request.GET.get("arrendamiento_page", "1")
     selected_cultivo_obj = None
 
     if selected_cultivo:
@@ -403,9 +486,17 @@ def costo_list(request):
                         )
             messages.success(request, f"Se actualizaron {changed} valores de precios y costos.")
 
+    barbecho_costo_q = Q(cultivo__codigo__iexact="BARBECHO") | Q(
+        cultivo__nombre__iexact="BARBECHO"
+    )
+    barbecho_cultivo_q = Q(codigo__iexact="BARBECHO") | Q(
+        nombre__iexact="BARBECHO"
+    )
     costos = Costo.objects.select_related(
         "cultivo", "tipo_costo", "campania", "lote"
-    ).order_by("tipo_costo__codigo", "cultivo__codigo", "campania__orden", "lote__codigo")
+    ).exclude(barbecho_costo_q).order_by(
+        "tipo_costo__codigo", "cultivo__codigo", "campania__orden", "lote__codigo"
+    )
 
     if selected_tipo:
         costos = costos.filter(tipo_costo_id=selected_tipo)
@@ -414,8 +505,23 @@ def costo_list(request):
     if selected_cultivo:
         costos = costos.filter(cultivo_id=selected_cultivo)
 
-    paginator = Paginator(costos, 7)
+    tipo_seleccionado_codigo = (
+        TipoCosto.objects.filter(pk=selected_tipo)
+        .values_list("codigo", flat=True)
+        .first()
+        if selected_tipo
+        else None
+    )
+    show_costos_arrendamiento = tipo_seleccionado_codigo in {"frc", "vr"}
+    show_costos_generales = not show_costos_arrendamiento
+    costos_generales = costos.exclude(tipo_costo__codigo__in=("frc", "vr"))
+    costos_arrendamiento = costos.filter(tipo_costo__codigo__in=("frc", "vr"))
+    paginator = Paginator(costos_generales, 7)
     page_obj = paginator.get_page(selected_page)
+    arrendamiento_paginator = Paginator(costos_arrendamiento, 7)
+    arrendamiento_page_obj = arrendamiento_paginator.get_page(
+        selected_arrendamiento_page
+    )
     
     # Mostrar las campañas como años (2025/2026, 2026/2027, ...)
     anio_inicio_campania_actual = 2025
@@ -430,6 +536,13 @@ def costo_list(request):
             costo.campania_mostrar = f"{inicio}/{fin}"
         else:
             costo.campania_mostrar = "Global"
+    for costo in arrendamiento_page_obj.object_list:
+        if costo.campania:
+            inicio = anio_inicio_campania_actual + (costo.campania.orden - 1)
+            costo.campania_mostrar = f"{inicio}/{inicio + 1}"
+        else:
+            costo.campania_mostrar = "Global"
+
     anio_inicio_campania_actual = 2025
 
     campanias = Campania.objects.order_by("orden")
@@ -441,7 +554,7 @@ def costo_list(request):
         
     TRADUCCIONES_TIPO_COSTO = {
         "fsp": "Precio futuro de venta",
-        "sc": "Costo de siembra",
+        "sc": "Costo de cultivo",
         "hc": "Costo de cosecha",
         "frc": "Costo fijo de arrendamiento",
         "vr": "Costo variable de arrendamiento",
@@ -466,18 +579,39 @@ def costo_list(request):
             costo.tipo_costo.codigo,
             costo.tipo_costo.descripcion,
         )
+
+    for costo in arrendamiento_page_obj.object_list:
+        costo.tipo_costo.descripcion_mostrar = TRADUCCIONES_TIPO_COSTO.get(
+            costo.tipo_costo.codigo,
+            costo.tipo_costo.descripcion,
+        )
+
+    show_costo_cultivo_help = any(
+        tipo.codigo == "sc" and str(tipo.id) == selected_tipo
+        for tipo in tipos_costo
+    )
     
+    margenes, indiferencias = _build_economic_indicators()
     context = {
         "costos": page_obj.object_list,
         "page_obj": page_obj,
         "paginator": paginator,
+        "costos_arrendamiento": arrendamiento_page_obj.object_list,
+        "arrendamiento_page_obj": arrendamiento_page_obj,
+        "arrendamiento_paginator": arrendamiento_paginator,
+        "show_costos_generales": show_costos_generales,
+        "show_costos_arrendamiento": show_costos_arrendamiento,
         "tipos_costo": tipos_costo,
         "campanias": campanias,
-        "cultivos": Cultivo.objects.order_by("codigo"),
+        "cultivos": Cultivo.objects.exclude(barbecho_cultivo_q).order_by("codigo"),
         "selected_tipo": selected_tipo,
         "selected_campania": selected_campania,
         "selected_cultivo": selected_cultivo,
         "selected_page": selected_page,
+        "selected_tab": selected_tab,
+        "show_costo_cultivo_help": show_costo_cultivo_help,
+        "margenes": margenes,
+        "indiferencias": indiferencias,
         "selected_cultivo_obj": selected_cultivo_obj,
         "costos_pendientes": (
             selected_cultivo_obj.costo_set.filter(configurado=False).count()
