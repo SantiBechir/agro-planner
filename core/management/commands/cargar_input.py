@@ -15,9 +15,17 @@ from core.models import (
     SecuenciaPermitida,
     SetupCultivo,
     SlotSiembra,
+    SueloLote,
     TipoCosto,
     TipoSuelo,
 )
+
+
+NOMBRES_SUELO = {
+    "S1": "Molisol",
+    "S2": "Alfisol",
+    "S3": "Vertisol",
+}
 
 
 def _read_block_with_header(
@@ -87,7 +95,8 @@ class Command(BaseCommand):
         creados = actualizados = 0
         for codigo in codigos:
             obj, created = TipoSuelo.objects.update_or_create(
-                codigo=codigo, defaults={"nombre": codigo}
+                codigo=codigo,
+                defaults={"nombre": NOMBRES_SUELO.get(codigo, codigo)},
             )
             if created:
                 creados += 1
@@ -228,13 +237,48 @@ class Command(BaseCommand):
         return creados, actualizados
 
     def _cargar_lotes(self, xl):
-        p_j = pd.read_excel(xl, sheet_name="Plots (J)", skiprows=0, usecols="A:E")
+        p_j = pd.read_excel(xl, sheet_name="Plots (J)", skiprows=0, usecols="A:D")
         p_j.dropna(how="all", inplace=True)
         p_j.set_index("J", inplace=True)
 
+        proporciones = pd.read_excel(
+            xl, sheet_name="Plots (J)", usecols="F:I", header=None
+        )
+        proporciones.columns = ["J", "S1", "S2", "S3"]
+        proporciones = proporciones[proporciones["J"].notna()].set_index("J")
+
+        niveles = pd.read_excel(
+            xl, sheet_name="Plots (J)", usecols="K:N", header=1
+        )
+        niveles.columns = ["J", "S1", "S2", "S3"]
+        niveles = niveles[niveles["J"].notna()].set_index("J")
+
         creados = actualizados = 0
         for codigo, row in p_j.iterrows():
-            tipo_suelo = TipoSuelo.objects.get(codigo=row["suelo"])
+            componentes = []
+            if codigo in proporciones.index:
+                for suelo_code, proporcion in proporciones.loc[codigo].items():
+                    if pd.isna(proporcion) or float(proporcion) <= 0:
+                        continue
+                    nivel = "M"
+                    if codigo in niveles.index:
+                        value = niveles.loc[codigo].get(suelo_code, "M")
+                        if value in {"A", "M", "B"}:
+                            nivel = value
+                    try:
+                        suelo = TipoSuelo.objects.get(codigo=suelo_code)
+                    except TipoSuelo.DoesNotExist:
+                        continue
+                    componentes.append((suelo, float(proporcion), nivel))
+
+            if not componentes:
+                # Compatibility fallback for legacy input files with one soil.
+                suelo_code = row.get("suelo")
+                if pd.isna(suelo_code):
+                    continue
+                componentes = [(TipoSuelo.objects.get(codigo=suelo_code), 1.0, "M")]
+
+            tipo_suelo = max(componentes, key=lambda item: item[1])[0]
             obj, created = Lote.objects.update_or_create(
                 codigo=codigo,
                 defaults={
@@ -249,6 +293,18 @@ class Command(BaseCommand):
                 creados += 1
             else:
                 actualizados += 1
+            SueloLote.objects.filter(lote=obj).delete()
+            SueloLote.objects.bulk_create(
+                [
+                    SueloLote(
+                        lote=obj,
+                        tipo_suelo=suelo,
+                        proporcion=proporcion,
+                        nivel_productividad=nivel,
+                    )
+                    for suelo, proporcion, nivel in componentes
+                ]
+            )
         return creados, actualizados
 
     def _cargar_tipos_costo(self, xl):

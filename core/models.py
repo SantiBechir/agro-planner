@@ -82,6 +82,33 @@ class Lote(models.Model):
         return self.nombre or self.codigo
 
 
+class SueloLote(models.Model):
+    class NivelProductividad(models.TextChoices):
+        ALTO = "A", "Alto"
+        MEDIO = "M", "Medio"
+        BAJO = "B", "Bajo"
+
+    lote = models.ForeignKey(Lote, on_delete=models.CASCADE, related_name="suelos")
+    tipo_suelo = models.ForeignKey(TipoSuelo, on_delete=models.PROTECT)
+    proporcion = models.FloatField()
+    nivel_productividad = models.CharField(
+        max_length=1,
+        choices=NivelProductividad.choices,
+        default=NivelProductividad.MEDIO,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lote", "tipo_suelo"],
+                name="unique_suelo_lote",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.lote.codigo} / {self.tipo_suelo.codigo}"
+
+
 class TipoCosto(models.Model):
     codigo = models.CharField(max_length=50, unique=True)
     descripcion = models.CharField(max_length=200)

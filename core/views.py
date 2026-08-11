@@ -1,10 +1,13 @@
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Avg, Q
+from django.db.models import Q
 from django.core.paginator import Paginator
+from core.services.economic_indicators import build_economic_indicators
 from core.models import (
     Lote,
     Cultivo,
@@ -341,84 +344,6 @@ def cultivo_create(request):
     return cultivo_list(request)
 
 
-def _build_economic_indicators():
-    """Build per-hectare economic indicators from the configured cost inputs."""
-    barbecho_q = Q(codigo__iexact="BARBECHO") | Q(nombre__iexact="BARBECHO")
-    cultivos = list(
-        Cultivo.objects.exclude(barbecho_q)
-        .annotate(rendimiento_promedio=Avg("rendimientocultivosuelo__valor"))
-        .order_by("codigo")
-    )
-    campanias = list(Campania.objects.order_by("orden"))
-    costos = Costo.objects.filter(cultivo__in=cultivos, lote__isnull=True).select_related(
-        "tipo_costo"
-    )
-    valores = {
-        (costo.cultivo_id, costo.tipo_costo.codigo, costo.campania_id): costo.valor
-        for costo in costos
-    }
-
-    def valor(cultivo, codigo, campania):
-        return valores.get(
-            (cultivo.id, codigo, campania.id),
-            valores.get((cultivo.id, codigo, None), 0),
-        )
-
-    margenes = []
-    indiferencias = []
-    for cultivo in cultivos:
-        rendimiento = cultivo.rendimiento_promedio or 0
-        for campania in campanias:
-            precio = valor(cultivo, "fsp", campania)
-            siembra = valor(cultivo, "sc", campania)
-            cosecha = valor(cultivo, "hc", campania)
-            comision = valor(cultivo, "tf", campania)
-            proporcion_acond = valor(cultivo, "scp", campania)
-            costo_acond = valor(cultivo, "cp", campania)
-            proporcion_flete_corto = valor(cultivo, "st", campania)
-            flete_corto = valor(cultivo, "cst", campania)
-            flete_largo = valor(cultivo, "clt", campania)
-
-            ingreso = precio * rendimiento
-            transporte_por_ton = (
-                proporcion_flete_corto * flete_corto
-                + (1 - proporcion_flete_corto) * flete_largo
-            )
-            costo_variable_por_ton = (
-                precio * comision
-                + proporcion_acond * costo_acond
-                + transporte_por_ton
-            )
-            costos_directos = siembra + cosecha + rendimiento * costo_variable_por_ton
-            precio_neto_por_ton = precio - costo_variable_por_ton
-            margen = ingreso - costos_directos
-            rendimiento_indiferencia = (
-                (siembra + cosecha) / precio_neto_por_ton
-                if precio_neto_por_ton > 0
-                else None
-            )
-            etiqueta_campania = f"{2025 + campania.orden - 1}/{2026 + campania.orden - 1}"
-            base = {
-                "cultivo": cultivo.codigo,
-                "campania": etiqueta_campania,
-                "rendimiento_promedio": rendimiento,
-                "precio": precio,
-            }
-            margenes.append({
-                **base,
-                "ingreso": ingreso,
-                "costos_directos": costos_directos,
-                "margen": margen,
-            })
-            indiferencias.append({
-                **base,
-                "costos_fijos": siembra + cosecha,
-                "precio_neto": precio_neto_por_ton,
-                "rendimiento_indiferencia": rendimiento_indiferencia,
-            })
-    return margenes, indiferencias
-
-
 @login_required(login_url="login")
 def costo_list(request):
     selected_tab = request.GET.get("tab", "detalle")
@@ -427,6 +352,25 @@ def costo_list(request):
     selected_tipo = request.GET.get("tipo", "")
     selected_campania = request.GET.get("campania", "")
     selected_cultivo = request.GET.get("cultivo", "")
+    ri_view = request.GET.get("ri_view", "grafico")
+    if ri_view not in {"lista", "grafico"}:
+        ri_view = "grafico"
+    ri_selected_campanias = request.GET.getlist("ri_campania")
+    ri_selected_suelos = request.GET.getlist("ri_suelo")
+    ri_selected_cultivos = request.GET.getlist("ri_cultivo")
+    ri_cultivo_mode = request.GET.get("ri_cultivo_mode", "selected")
+    if ri_cultivo_mode not in {"all", "selected"}:
+        ri_cultivo_mode = "selected"
+    if "ri_cultivo_mode" not in request.GET and not ri_selected_cultivos:
+        primer_cultivo = (
+            Cultivo.objects.exclude(
+                Q(codigo__iexact="BARBECHO") | Q(nombre__iexact="BARBECHO")
+            )
+            .order_by("codigo")
+            .first()
+        )
+        if primer_cultivo:
+            ri_selected_cultivos = [str(primer_cultivo.id)]
     selected_page = request.GET.get("page", "1")
     selected_arrendamiento_page = request.GET.get("arrendamiento_page", "1")
     selected_cultivo_obj = None
@@ -591,7 +535,139 @@ def costo_list(request):
         for tipo in tipos_costo
     )
     
-    margenes, indiferencias = _build_economic_indicators()
+    indicator_data = build_economic_indicators()
+    if selected_campania:
+        indicator_data = {
+            key: [
+                row
+                for row in rows
+                if str(row["campania_id"]) == selected_campania
+            ]
+            for key, rows in indicator_data.items()
+        }
+    if selected_cultivo:
+        indicator_data = {
+            key: [
+                row
+                for row in rows
+                if str(row["cultivo_id"]) == selected_cultivo
+            ]
+            for key, rows in indicator_data.items()
+        }
+    margenes = [
+        {
+            "cultivo": row["cultivo"],
+            "campania": row["campania"],
+            "suelo": row["suelo"],
+            "nivel_mostrar": {"A": "Alto", "M": "Medio", "B": "Bajo"}.get(
+                row["nivel"], row["nivel"]
+            ),
+            "rendimiento_promedio": row["rendimiento"],
+            "ingreso": row["ingreso_bruto"],
+            "costos_directos": row["costos_directos"],
+            "margen": row["margen_bruto"],
+            "margen_con_arrendamiento": row["margen_con_arrendamiento"],
+        }
+        for row in indicator_data["margins"]
+    ]
+    indiferencias = [
+        {
+            "cultivo": row["cultivo"],
+            "campania": row["campania"],
+            "suelo": row["suelo"],
+            "nivel_mostrar": {"A": "Alto", "M": "Medio", "B": "Bajo"}.get(
+                row["nivel"], row["nivel"]
+            ),
+            "rendimiento_estimado": row["rendimiento_estimado"],
+            "precio_neto": row["precio_neto"],
+            "rendimiento_indiferencia": row["rendimiento_indiferencia"],
+        }
+        for row in indicator_data["break_even"]
+    ]
+    suelos = TipoSuelo.objects.order_by("codigo")
+    ri_chart_rows = [
+        row
+        for row in indicator_data["break_even"]
+        if row["nivel"] == "M" and row["rendimiento_indiferencia"] is not None
+    ]
+    if ri_selected_campanias:
+        ri_chart_rows = [
+            row
+            for row in ri_chart_rows
+            if str(row["campania_id"]) in ri_selected_campanias
+        ]
+    if ri_selected_suelos:
+        ri_chart_rows = [
+            row for row in ri_chart_rows if str(row["suelo_id"]) in ri_selected_suelos
+        ]
+    if ri_cultivo_mode == "selected":
+        ri_chart_rows = [
+            row
+            for row in ri_chart_rows
+            if str(row["cultivo_id"]) in ri_selected_cultivos
+        ]
+
+    chart_labels = sorted({row["cultivo"] for row in ri_chart_rows})
+    chart_groups = {}
+    for row in ri_chart_rows:
+        group = (row["suelo_id"], row["campania_id"])
+        chart_groups.setdefault(
+            group,
+            {
+                "suelo": row["suelo"],
+                "campania": row["campania"],
+                "campania_id": row["campania_id"],
+                "values": {},
+            },
+        )["values"][row["cultivo"]] = round(
+            row["rendimiento_indiferencia"] * 1000, 0
+        )
+    campaign_ids = sorted({row["campania_id"] for row in ri_chart_rows})
+    campaign_position = {campania_id: index for index, campania_id in enumerate(campaign_ids)}
+    soil_colors = {
+        "Molisol": "#4d8b4f",
+        "Alfisol": "#4f86d9",
+        "Vertisol": "#f59e0b",
+    }
+
+    def campaign_tone(base_color, position):
+        """Keep a soil's hue and lighten it for later campaigns."""
+        red, green, blue = (int(base_color[index : index + 2], 16) for index in (1, 3, 5))
+        lightness = min(position * 0.22, 0.55)
+        return "#{:02x}{:02x}{:02x}".format(
+            round(red + (255 - red) * lightness),
+            round(green + (255 - green) * lightness),
+            round(blue + (255 - blue) * lightness),
+        )
+
+    ordered_chart_groups = sorted(
+        chart_groups.values(), key=lambda group: (group["campania_id"], group["suelo"])
+    )
+    ri_chart_data = {
+        "labels": chart_labels,
+        "datasets": [
+            {
+                "label": f"{group['suelo']} · {group['campania']}",
+                "data": [group["values"].get(cultivo) for cultivo in chart_labels],
+                "backgroundColor": campaign_tone(
+                    soil_colors.get(group["suelo"], "#64748b"),
+                    campaign_position[group["campania_id"]],
+                ),
+                "borderRadius": 6,
+                "maxBarThickness": 42,
+            }
+            for group in ordered_chart_groups
+        ],
+    }
+    ri_chart_legend = [
+        {"index": index, "label": dataset["label"], "color": dataset["backgroundColor"]}
+        for index, dataset in enumerate(ri_chart_data["datasets"])
+    ]
+    ri_maximo = max(
+        ri_chart_rows,
+        key=lambda row: row["rendimiento_indiferencia"],
+        default=None,
+    )
     context = {
         "costos": page_obj.object_list,
         "page_obj": page_obj,
@@ -609,9 +685,31 @@ def costo_list(request):
         "selected_cultivo": selected_cultivo,
         "selected_page": selected_page,
         "selected_tab": selected_tab,
+        "show_standard_indicator_filters": selected_tab == "margenes" or (
+            selected_tab == "indiferencia" and ri_view == "lista"
+        ),
         "show_costo_cultivo_help": show_costo_cultivo_help,
         "margenes": margenes,
         "indiferencias": indiferencias,
+        "ri_view": ri_view,
+        "ri_selected_campanias": ri_selected_campanias,
+        "ri_selected_suelos": ri_selected_suelos,
+        "ri_selected_cultivos": ri_selected_cultivos,
+        "ri_cultivo_mode": ri_cultivo_mode,
+        "suelos": suelos,
+        "ri_chart_data": json.dumps(ri_chart_data),
+        "ri_chart_has_data": bool(ri_chart_rows),
+        "ri_chart_legend": ri_chart_legend,
+        "ri_chart_campaign_count": len(
+            {row["campania_id"] for row in ri_chart_rows}
+        ),
+        "ri_chart_soil_count": len({row["suelo_id"] for row in ri_chart_rows}),
+        "ri_maximo": ri_maximo,
+        "ri_maximo_kg": (
+            round(ri_maximo["rendimiento_indiferencia"] * 1000)
+            if ri_maximo
+            else None
+        ),
         "selected_cultivo_obj": selected_cultivo_obj,
         "costos_pendientes": (
             selected_cultivo_obj.costo_set.filter(configurado=False).count()

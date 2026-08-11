@@ -16,6 +16,7 @@ from .models import (
     SecuenciaPermitida,
     SetupCultivo,
     SlotSiembra,
+    SueloLote,
     TipoCosto,
     TipoSuelo,
 )
@@ -74,6 +75,13 @@ class LoteAdmin(admin.ModelAdmin):
     )
     list_filter = ("tipo_suelo",)
     search_fields = ("codigo", "nombre")
+
+
+@admin.register(SueloLote)
+class SueloLoteAdmin(admin.ModelAdmin):
+    list_display = ("lote", "tipo_suelo", "proporcion", "nivel_productividad")
+    list_filter = ("tipo_suelo", "nivel_productividad")
+    search_fields = ("lote__codigo",)
 
 
 @admin.register(TipoCosto)
