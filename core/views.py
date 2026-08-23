@@ -352,6 +352,15 @@ def costo_list(request):
     selected_tipo = request.GET.get("tipo", "")
     selected_campania = request.GET.get("campania", "")
     selected_cultivo = request.GET.get("cultivo", "")
+    mb_selected_campanias = request.GET.getlist("mb_campania")
+    mb_selected_suelos = request.GET.getlist("mb_suelo")
+    mb_selected_cultivos = request.GET.getlist("mb_cultivo")
+    mb_cultivo_mode = request.GET.get("mb_cultivo_mode", "selected")
+    if mb_cultivo_mode not in {"all", "selected"}:
+        mb_cultivo_mode = "selected"
+    mb_view = request.GET.get("mb_view", "grafico")
+    if mb_view not in {"lista", "grafico"}:
+        mb_view = "grafico"
     ri_view = request.GET.get("ri_view", "grafico")
     if ri_view not in {"lista", "grafico"}:
         ri_view = "grafico"
@@ -495,6 +504,13 @@ def costo_list(request):
         inicio = anio_inicio_campania_actual + (campania.orden - 1)
         fin = inicio + 1
         campania.nombre_mostrar = f"{inicio}/{fin}"
+
+    if "mb_cultivo_mode" not in request.GET and not mb_selected_cultivos:
+        primer_cultivo_mb = (
+            Cultivo.objects.exclude(barbecho_cultivo_q).order_by("codigo").first()
+        )
+        if primer_cultivo_mb:
+            mb_selected_cultivos = [str(primer_cultivo_mb.id)]
         
     TRADUCCIONES_TIPO_COSTO = {
         "fsp": "Precio futuro de venta",
@@ -554,6 +570,7 @@ def costo_list(request):
             ]
             for key, rows in indicator_data.items()
         }
+    margin_indicator_rows = indicator_data["margins"]
     margenes = [
         {
             "cultivo": row["cultivo"],
@@ -568,7 +585,7 @@ def costo_list(request):
             "margen": row["margen_bruto"],
             "margen_con_arrendamiento": row["margen_con_arrendamiento"],
         }
-        for row in indicator_data["margins"]
+        for row in margin_indicator_rows
     ]
     indiferencias = [
         {
@@ -585,6 +602,102 @@ def costo_list(request):
         for row in indicator_data["break_even"]
     ]
     suelos = TipoSuelo.objects.order_by("codigo")
+    mb_rows = [row for row in margin_indicator_rows if row["nivel"] == "M"]
+    if mb_selected_campanias:
+        mb_rows = [
+            row for row in mb_rows
+            if str(row["campania_id"]) in mb_selected_campanias
+        ]
+    if mb_selected_suelos:
+        mb_rows = [
+            row for row in mb_rows if str(row["suelo_id"]) in mb_selected_suelos
+        ]
+    if mb_cultivo_mode == "selected":
+        mb_rows = [
+            row for row in mb_rows
+            if str(row["cultivo_id"]) in mb_selected_cultivos
+        ]
+    mb_rows.sort(key=lambda row: (row["cultivo"], row["suelo"]))
+    mb_chart_colors = ["#4d8b4f", "#2563b9", "#f97316", "#7c3aed", "#0f766e", "#dc2626"]
+    mb_chart_data = {
+        "labels": [row["cultivo"] for row in mb_rows],
+        "datasets": [{
+            "label": "Margen bruto",
+            "data": [round(row["margen_bruto"], 2) for row in mb_rows],
+            "backgroundColor": [mb_chart_colors[index % len(mb_chart_colors)] for index in range(len(mb_rows))],
+            "borderRadius": 6,
+            "maxBarThickness": 42,
+        }],
+    }
+    mb_cost_row = mb_rows[0] if mb_rows else None
+    mb_cost_labels = [
+        "Costo de cultivo", "Costo de cosecha", "Comercializaci\u00f3n",
+        "Acondicionamiento", "Flete",
+    ]
+    mb_cost_values = (
+        [
+            round(mb_cost_row["costo_cultivo"], 2),
+            round(mb_cost_row["costo_cosecha"], 2),
+            round(mb_cost_row["costo_comercializacion"], 2),
+            round(mb_cost_row["costo_acondicionamiento"], 2),
+            round(mb_cost_row["costo_flete"], 2),
+        ] if mb_cost_row else []
+    )
+    mb_cost_chart_data = {
+        "labels": mb_cost_labels,
+        "datasets": [{
+            "data": mb_cost_values,
+            "backgroundColor": ["#166534", "#4d8b4f", "#2563b9", "#eab308", "#f97316"],
+            "borderWidth": 2,
+            "borderColor": "#ffffff",
+        }],
+    }
+    mb_cost_colors = ["#166534", "#4d8b4f", "#2563b9", "#eab308", "#f97316"]
+    mb_cost_total = sum(mb_cost_values)
+    mb_cost_breakdown = [
+        {
+            "label": label,
+            "value": value,
+            "color": mb_cost_colors[index],
+            "percentage": round(value / mb_cost_total * 100) if mb_cost_total else 0,
+        }
+        for index, (label, value) in enumerate(zip(mb_cost_labels, mb_cost_values))
+    ]
+    mb_cost_charts = []
+    for row in mb_rows:
+        values = [
+            round(row["costo_cultivo"], 2),
+            round(row["costo_cosecha"], 2),
+            round(row["costo_comercializacion"], 2),
+            round(row["costo_acondicionamiento"], 2),
+            round(row["costo_flete"], 2),
+        ]
+        total = sum(values)
+        mb_cost_charts.append({
+            "cultivo": row["cultivo"],
+            "suelo": row["suelo"],
+            "campania": row["campania"],
+            "total": total,
+            "chart_data": json.dumps({
+                "labels": mb_cost_labels,
+                "datasets": [{
+                    "data": values,
+                    "backgroundColor": mb_cost_colors,
+                    "borderWidth": 2,
+                    "borderColor": "#ffffff",
+                }],
+            }),
+            "breakdown": [
+                {
+                    "label": label,
+                    "value": value,
+                    "color": mb_cost_colors[index],
+                    "percentage": round(value / total * 100) if total else 0,
+                }
+                for index, (label, value) in enumerate(zip(mb_cost_labels, values))
+            ],
+        })
+
     ri_chart_rows = [
         row
         for row in indicator_data["break_even"]
@@ -685,11 +798,26 @@ def costo_list(request):
         "selected_cultivo": selected_cultivo,
         "selected_page": selected_page,
         "selected_tab": selected_tab,
-        "show_standard_indicator_filters": selected_tab == "margenes" or (
-            selected_tab == "indiferencia" and ri_view == "lista"
-        ),
+        "show_standard_indicator_filters": (
+            selected_tab == "margenes" and mb_view == "lista"
+        ) or (selected_tab == "indiferencia" and ri_view == "lista"),
         "show_costo_cultivo_help": show_costo_cultivo_help,
         "margenes": margenes,
+        "mb_rows": mb_rows,
+        "mb_selected_campanias": mb_selected_campanias,
+        "mb_selected_suelos": mb_selected_suelos,
+        "mb_selected_cultivos": mb_selected_cultivos,
+        "mb_cultivo_mode": mb_cultivo_mode,
+        "mb_view": mb_view,
+        "mb_chart_data": json.dumps(mb_chart_data),
+        "mb_chart_has_data": bool(mb_rows),
+        "mb_cost_row": mb_cost_row,
+        "mb_cost_labels": mb_cost_labels,
+        "mb_cost_values": mb_cost_values,
+        "mb_cost_chart_data": json.dumps(mb_cost_chart_data),
+        "mb_cost_breakdown": mb_cost_breakdown,
+        "mb_cost_total": mb_cost_total,
+        "mb_cost_charts": mb_cost_charts,
         "indiferencias": indiferencias,
         "ri_view": ri_view,
         "ri_selected_campanias": ri_selected_campanias,

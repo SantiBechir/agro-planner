@@ -69,6 +69,70 @@
                 }
             });
         }
+        function renderMarginCharts() {
+            const barCanvas = document.getElementById('mb-bar-chart');
+            if (barCanvas && barCanvas.dataset.chart && window.Chart) {
+                if (barCanvas._chart) barCanvas._chart.destroy();
+                const data = JSON.parse(barCanvas.dataset.chart);
+                barCanvas._chart = new Chart(barCanvas, {
+                    type: 'bar', data,
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        devicePixelRatio: Math.max(2, window.devicePixelRatio || 1),
+                        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `USD ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(context.raw)} /ha` } } },
+                        scales: { x: { beginAtZero: true, title: { display: true, text: 'USD/ha', font: { weight: 'bold' } } }, y: { grid: { display: false }, ticks: { font: { weight: 'bold' } } } }
+                    }
+                });
+            }
+            const costCanvases = document.querySelectorAll('#mb-cost-chart, [data-mb-cost-chart]');
+            costCanvases.forEach((costCanvas) => {
+                if (!costCanvas.dataset.chart || !window.Chart) return;
+                if (costCanvas._chart) costCanvas._chart.destroy();
+                costCanvas._chart = new Chart(costCanvas, {
+                    type: 'doughnut', data: JSON.parse(costCanvas.dataset.chart),
+                    options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(2, window.devicePixelRatio || 1), cutout: '60%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `${context.label}: USD ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(context.raw)}` } } } }
+                });
+            });
+            const mainCostCanvas = document.getElementById('mb-cost-chart');
+            const mainCostTitle = mainCostCanvas?.closest('.rounded-xl')?.querySelector('h3');
+            if (false && mainCostTitle && !mainCostTitle.dataset.bestOption) {
+                mainCostTitle.textContent = `Mejor opci\u00f3n · ${mainCostTitle.textContent}`;
+                mainCostTitle.dataset.bestOption = 'true';
+            }
+            const bestOptionData = document.getElementById('mb-best-option-data');
+            if (mainCostTitle && bestOptionData && !document.getElementById('mb-best-option-summary')) {
+                mainCostTitle.textContent = 'Opci\u00f3n m\u00e1s recomendada';
+                const summary = document.createElement('div');
+                summary.id = 'mb-best-option-summary';
+                summary.className = 'mb-3 rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs leading-5 text-slate-600';
+                summary.textContent = `Cultivo: ${bestOptionData.dataset.cultivo} · Campaña: ${bestOptionData.dataset.campania} · Suelo: ${bestOptionData.dataset.suelo}. Se recomienda porque tiene el mayor margen bruto de la selecci\u00f3n: USD ${bestOptionData.dataset.margen}/ha. Ingreso: USD ${bestOptionData.dataset.ingreso}/ha. Costos directos: USD ${bestOptionData.dataset.costos}/ha.`;
+                mainCostTitle.parentElement.insertAdjacentElement('afterend', summary);
+            }
+        }
+        function toggleMarginComparisonTable(button) {
+            const tableContainer = button.closest('section')?.querySelector('.p-5 > .overflow-x-auto');
+            if (!tableContainer) return;
+            const expanded = button.dataset.expanded === 'true';
+            tableContainer.querySelectorAll('tbody tr').forEach((row, index) => {
+                if (index >= 2) row.classList.toggle('hidden', expanded);
+            });
+            button.dataset.expanded = expanded ? 'false' : 'true';
+            button.innerHTML = expanded
+                ? '<span>⌄</span><span>Desplegar tabla comparativa</span>'
+                : '<span>⌃</span><span>Ocultar tabla comparativa</span>';
+        }
+        function initializeMarginComparisonTable() {
+            const tableContainer = document.querySelector('#mb-section .p-5 > .overflow-x-auto');
+            if (!tableContainer) return;
+            tableContainer.style.maxHeight = '385px';
+            tableContainer.style.overflowY = 'auto';
+            tableContainer.querySelectorAll('thead th').forEach((header) => {
+                header.style.position = 'sticky';
+                header.style.top = '0';
+                header.style.zIndex = '1';
+                header.style.backgroundColor = '#ecfdf5';
+            });
+        }
         function toggleRiDataset(button) {
             const canvas = document.getElementById('ri-bar-chart');
             const chart = canvas?._chart;
@@ -138,12 +202,54 @@
             syncRiCropSelection();
             picker.classList.add('hidden');
         }
+        function toggleMbCropPicker() {
+            const picker = document.getElementById('mb-crop-picker');
+            if (picker) picker.classList.toggle('hidden');
+        }
+        function setMbCropMode(mode) {
+            const picker = document.getElementById('mb-crop-picker');
+            const modeInput = document.getElementById('mb-cultivo-mode');
+            if (!picker || !modeInput) return;
+            modeInput.value = mode;
+            picker.querySelectorAll('input[name="mb_cultivo"]').forEach((input) => { input.checked = mode === 'all'; });
+        }
+        function syncMbCropSelection() {
+            const picker = document.getElementById('mb-crop-picker');
+            const modeInput = document.getElementById('mb-cultivo-mode');
+            const visibleSelection = document.getElementById('mb-visible-selection');
+            if (!picker || !modeInput || !visibleSelection) return;
+            const inputs = Array.from(picker.querySelectorAll('input[name="mb_cultivo"]'));
+            const selected = inputs.filter((input) => input.checked);
+            modeInput.value = selected.length === inputs.length ? 'all' : 'selected';
+            visibleSelection.innerHTML = '';
+            selected.forEach((input) => {
+                const chip = document.createElement('span');
+                chip.className = 'inline-flex items-center rounded-lg border border-[#4d8b4f] bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-[#2f5e31]';
+                chip.textContent = input.nextElementSibling.textContent.trim();
+                visibleSelection.appendChild(chip);
+            });
+            const addButton = document.createElement('button');
+            addButton.type = 'button'; addButton.onclick = toggleMbCropPicker;
+            addButton.className = 'flex h-8 w-8 items-center justify-center rounded-lg border border-dashed border-[#4d8b4f] bg-white text-lg font-bold text-[#2f5e31] hover:bg-emerald-50';
+            addButton.setAttribute('aria-label', 'Editar cultivos'); addButton.textContent = '+';
+            visibleSelection.appendChild(addButton);
+        }
+        function applyMbCropSelection() {
+            syncMbCropSelection();
+            document.getElementById('mb-crop-picker')?.classList.add('hidden');
+        }
         document.addEventListener('DOMContentLoaded', renderIndifferenceChart);
         document.addEventListener('htmx:afterSettle', renderIndifferenceChart);
+        document.addEventListener('DOMContentLoaded', renderMarginCharts);
+        document.addEventListener('htmx:afterSettle', renderMarginCharts);
+        document.addEventListener('DOMContentLoaded', initializeMarginComparisonTable);
+        document.addEventListener('htmx:afterSettle', initializeMarginComparisonTable);
         document.addEventListener('DOMContentLoaded', formatRiMaximumYield);
         document.addEventListener('htmx:afterSettle', formatRiMaximumYield);
         document.addEventListener('DOMContentLoaded', syncRiCropSelection);
         document.addEventListener('htmx:afterSettle', syncRiCropSelection);
+        document.addEventListener('DOMContentLoaded', syncMbCropSelection);
+        document.addEventListener('htmx:afterSettle', syncMbCropSelection);
     </script>
 
     <style>
