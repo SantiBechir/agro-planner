@@ -1,4 +1,10 @@
 from django.db import models
+from django.db.models.functions import Lower
+
+
+# Fallback start year of the current planning campaign, used when the first
+# planning campaign (C1) has no fecha_inicio to anchor year labels on.
+ANIO_INICIO_CAMPANIA_ACTUAL = 2025
 
 
 class TipoSuelo(models.Model):
@@ -72,14 +78,47 @@ class Cultivo(models.Model):
 
 class Lote(models.Model):
     codigo = models.CharField(max_length=50, unique=True)
-    nombre = models.CharField(max_length=100, blank=True)
+    nombre = models.CharField(max_length=100)
     superficie_ha = models.FloatField()
     max_cultivos_principales = models.PositiveIntegerField()
     max_cultivos_secundarios = models.PositiveIntegerField()
     tipo_suelo = models.ForeignKey(TipoSuelo, on_delete=models.PROTECT)
+    habilitado = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower("nombre"), name="unique_lote_nombre_ci"
+            )
+        ]
 
     def __str__(self):
         return self.nombre or self.codigo
+
+
+class Ambiente(models.Model):
+    class Rendimiento(models.TextChoices):
+        ALTO = "A", "Alto"
+        MEDIO = "M", "Medio"
+        BAJO = "B", "Bajo"
+
+    lote = models.ForeignKey(
+        Lote, on_delete=models.CASCADE, related_name="ambientes"
+    )
+    tipo_suelo = models.ForeignKey(TipoSuelo, on_delete=models.PROTECT)
+    rendimiento_esperado = models.CharField(
+        max_length=1, choices=Rendimiento.choices
+    )
+    superficie_ha = models.FloatField()
+
+    class Meta:
+        unique_together = ("lote", "tipo_suelo")
+
+    def __str__(self):
+        return (
+            f"{self.lote.codigo} / {self.tipo_suelo.codigo} "
+            f"[{self.get_rendimiento_esperado_display()}] {self.superficie_ha} ha"
+        )
 
 
 class TipoCosto(models.Model):
@@ -229,13 +268,31 @@ class ImpactoRotacion(models.Model):
 
 class CampaniaHistorica(models.Model):
     codigo = models.CharField(max_length=20, unique=True)
-    orden = models.PositiveIntegerField(unique=True)
+    anio_inicio = models.PositiveIntegerField(unique=True)
 
     class Meta:
-        ordering = ["orden"]
+        ordering = ["-anio_inicio"]
+
+    @classmethod
+    def anio_base_actual(cls):
+        """Start year of the current planning campaign.
+
+        Anchored on the fecha_inicio year of the first planning campaign
+        (C1); falls back to ANIO_INICIO_CAMPANIA_ACTUAL when C1 has no
+        fecha_inicio. Single source of truth for "current campaign year".
+        """
+        campania_base = Campania.objects.order_by("orden").first()
+        if campania_base is not None and campania_base.fecha_inicio:
+            return campania_base.fecha_inicio.year
+        return ANIO_INICIO_CAMPANIA_ACTUAL
+
+    @property
+    def etiqueta(self):
+        """Producer-facing year label, e.g. "2024/2025"."""
+        return f"{self.anio_inicio}/{self.anio_inicio + 1}"
 
     def __str__(self):
-        return self.codigo
+        return self.etiqueta
 
 
 class HistorialLoteCultivo(models.Model):
@@ -245,6 +302,7 @@ class HistorialLoteCultivo(models.Model):
         CampaniaHistorica, on_delete=models.CASCADE
     )
     presente = models.BooleanField(default=True)
+    rendimiento_kg_ha = models.FloatField(null=True, blank=True)
 
     class Meta:
         constraints = [
