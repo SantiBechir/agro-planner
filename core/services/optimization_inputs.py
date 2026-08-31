@@ -18,7 +18,8 @@ from core.models import (
 
 def build_pyomo_input_data():
     # ── Conjuntos (Sets) ──────────────────────────────────────────────
-    j = list(Lote.objects.values_list("codigo", flat=True))
+    lotes_habilitados = Lote.objects.filter(habilitado=True)
+    j = list(lotes_habilitados.values_list("codigo", flat=True))
 
     cultivos = Cultivo.objects.filter(habilitado_optimizacion=True)
     i = list(cultivos.values_list("codigo", flat=True).order_by("pk"))
@@ -54,16 +55,18 @@ def build_pyomo_input_data():
 
     t = list(SlotSiembra.objects.values_list("codigo", flat=True).order_by("orden"))
 
-    ch = list(
-        CampaniaHistorica.objects.values_list("codigo", flat=True).order_by("orden")
-    )
+    # Model window: the solver consumes exactly the 3 most recent historical
+    # campaigns. Stored campaigns are year-based and mapped behind the scenes
+    # to the internal CH1/CH2/CH3 codes the solver expects.
+    ch = ["CH1", "CH2", "CH3"]
+    base_year = CampaniaHistorica.anio_base_actual()
 
     l = list(
         NivelAntiguedad.objects.values_list("codigo", flat=True).order_by("orden")
     )
 
     # ── Parámetros de lotes ───────────────────────────────────────────
-    lotes = Lote.objects.all()
+    lotes = lotes_habilitados
     ha = {lote.codigo: lote.superficie_ha for lote in lotes}
     max_m = {lote.codigo: lote.max_cultivos_principales for lote in lotes}
     max_s = {lote.codigo: lote.max_cultivos_secundarios for lote in lotes}
@@ -121,13 +124,20 @@ def build_pyomo_input_data():
         )
 
     # ── Historial ─────────────────────────────────────────────────────
+    # Each stored year maps to CH1 (base_year - 1), CH2 (base_year - 2) or
+    # CH3 (base_year - 3). Older campaigns stay stored for display and future
+    # model extensions but are excluded from the solver input.
     xh_dict = {}
-    for obj in HistorialLoteCultivo.objects.select_related(
+    for obj in HistorialLoteCultivo.objects.filter(
+        lote__habilitado=True
+    ).select_related(
         "cultivo", "lote", "campania_historica"
     ):
-        xh_dict[
-            (obj.cultivo.codigo, obj.lote.codigo, obj.campania_historica.codigo)
-        ] = (1 if obj.presente else 0)
+        lag = (base_year - 1) - obj.campania_historica.anio_inicio
+        if 0 <= lag <= 2:
+            xh_dict[
+                (obj.cultivo.codigo, obj.lote.codigo, f"CH{lag + 1}")
+            ] = (1 if obj.presente else 0)
 
     # ── Niveles de antigüedad (alfa) ──────────────────────────────────
     alfa_dict = {

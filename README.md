@@ -35,6 +35,7 @@ El endpoint `GET /` debe devolver `OK`.
 | `ALLOWED_HOSTS`         | Hosts permitidos (separados por coma)               | `localhost,mi-app.up.railway.app`   |
 | `RAILWAY_PUBLIC_DOMAIN` | Dominio público que Railway asigna al servicio      | `mi-app.up.railway.app`             |
 | `CSRF_TRUSTED_ORIGINS`  | Orígenes https confiables para CSRF (coma separada) | `https://mi-app.up.railway.app`     |
+| `INPUT_DATA_FILE`       | Ruta del Excel que se carga durante el release      | `docs/Input v1.xlsx`                |
 
 En desarrollo, si no configurás `DATABASE_URL`, usa SQLite automáticamente.
 
@@ -66,9 +67,13 @@ python manage.py migrate
 Para agregar como release command en Railway, en `Procfile`:
 
 ```
-release: python manage.py migrate
+release: python manage.py deploy_release
 web: gunicorn config.wsgi
 ```
+
+El comando de release siempre aplica las migraciones y luego ejecuta
+`cargar_input` con `docs/Input v1.xlsx`, tanto en staging como en
+producción. La ruta puede modificarse con `INPUT_DATA_FILE`.
 
 ## Estructura del proyecto
 

@@ -1,4 +1,20 @@
-<div class="space-y-8 max-w-7xl mx-auto" x-data="{ showModal: false }">
+<div class="space-y-8 max-w-7xl mx-auto" x-data="{
+   showModal: {% if create_error %}true{% else %}false{% endif %},
+   createErrorVisible: true,
+  nombreLote: '{{ create_nombre|escapejs }}',
+  numAmbientes: {{ create_ambientes|length }},
+  sueloSel: [{% for ambiente in create_ambientes %}'{{ ambiente.suelo|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+  rendimientoSel: [{% for ambiente in create_ambientes %}'{{ ambiente.rendimiento|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+  haSel: [{% for ambiente in create_ambientes %}'{{ ambiente.ha|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+  resetCreateForm() {
+    this.showModal = true;
+    this.nombreLote = '';
+    this.numAmbientes = 1;
+    this.sueloSel = [''];
+    this.rendimientoSel = [''];
+    this.haSel = [''];
+  }
+}">
   <!-- Header -->
   <div
     class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0"
@@ -15,7 +31,7 @@
     </div>
     <div>
       <button
-        @click="showModal = true"
+        @click="resetCreateForm()"
         class="px-5 py-3 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition-all duration-300 shadow-md shadow-emerald-700/10 transform hover:scale-[1.01]"
       >
         + Agregar Lote
@@ -47,7 +63,7 @@
     {% for lote in lotes %}
     <!-- Card Lote -->
     <div
-      class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-6 hover:border-[#4d8b4f]/30 hover:bg-white transition-all duration-300 relative group overflow-hidden"
+      class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl p-6 hover:border-[#4d8b4f]/30 hover:bg-white transition-all duration-300 relative group overflow-hidden {% if not lote.habilitado %}opacity-60{% endif %}"
     >
       <!-- Glowing agricultural accent inside card -->
       <div
@@ -56,22 +72,26 @@
 
       <!-- Cabecera Card -->
       <div>
-        <!-- Nombre del lote -->
-        <h3
-          class="text-xl font-bold text-[#2f5e31] group-hover:scale-[1.01] transition duration-300"
-        >
-          Lote {{ lote.codigo }}
-        </h3>
+        <div class="flex items-center justify-between gap-2">
+          <!-- Nombre del lote -->
+          <h3
+            class="text-xl font-bold text-[#2f5e31] group-hover:scale-[1.01] transition duration-300"
+          >
+            {{ lote.nombre }}
+          </h3>
+          {% if not lote.habilitado %}
+          <span
+            class="shrink-0 px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wider"
+            >Inactivo</span
+          >
+          {% endif %}
+        </div>
 
-        <!-- Tipo de suelo -->
-        <p class="mt-0.5 text-xs font-semibold text-[#4d8b4f]">
-          Suelo {{ lote.tipo_suelo.nombre }}
-        </p>
         <!-- ID -->
         <p
           class="text-[10px] text-slate-500 font-semibold tracking-wider mt-0.5 uppercase"
         >
-          ID: {{ lote.nombre|default:lote.codigo }}
+          ID: {{ lote.codigo }}
         </p>
       </div>
 
@@ -85,10 +105,96 @@
         >
       </div>
 
+      <!-- Ambientes -->
+      <div class="mt-4 space-y-1">
+        {% for ambiente in lote.ambientes.all %}
+        <div
+          class="flex items-center justify-between text-xs bg-slate-50 border border-slate-200/60 rounded-lg px-3 py-1.5"
+        >
+          <span class="font-bold text-[#4d8b4f]"
+            >Suelo {{ ambiente.tipo_suelo.nombre }}</span
+          >
+          <span class="text-slate-600 font-semibold"
+            >{{ ambiente.get_rendimiento_esperado_display }} ·
+            {{ ambiente.superficie_ha }} ha</span
+          >
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Edición completa del lote -->
+      <details
+        class="mt-4"
+        x-data="{
+          numAmbientes: {{ lote.ambientes.count }},
+          sueloSel: [{% for ambiente in lote.ambientes.all %}'{{ ambiente.tipo_suelo_id }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+          rendimientoSel: [{% for ambiente in lote.ambientes.all %}'{{ ambiente.rendimiento_esperado }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+          haSel: [{% for ambiente in lote.ambientes.all %}'{{ ambiente.superficie_ha }}'{% if not forloop.last %}, {% endif %}{% endfor %}]
+        }"
+      >
+        <summary class="cursor-pointer text-sm font-bold text-[#2f5e31] hover:text-[#4d8b4f] transition">
+          Editar lote
+        </summary>
+        <form
+          hx-post="{% url 'lote_update' lote.id %}"
+          hx-target="#main-content"
+          class="mt-3 bg-slate-50 border border-slate-200/60 rounded-xl p-3 space-y-3"
+        >
+          {% csrf_token %}
+          <p class="text-[10px] text-slate-500">Código inmutable: <strong>{{ lote.codigo }}</strong></p>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 mb-0.5">Nombre del lote</label>
+            <input type="text" name="nombre" value="{{ lote.nombre }}" required class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]" />
+          </div>
+          <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <input type="checkbox" name="habilitado" value="1" {% if lote.habilitado %}checked{% endif %} class="rounded border-slate-300 text-[#4d8b4f] focus:ring-[#4d8b4f]" />
+            Lote habilitado para planificación
+          </label>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 mb-0.5">Cantidad de ambientes</label>
+            <select x-model.number="numAmbientes" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]">
+              <option value="1">1 ambiente</option>
+              <option value="2">2 ambientes</option>
+              <option value="3">3 ambientes</option>
+            </select>
+          </div>
+          <div class="space-y-2">
+            <template x-for="i in numAmbientes" :key="i">
+              <div class="grid grid-cols-3 gap-2 p-2 bg-white border border-slate-200/60 rounded-lg">
+                <select :name="'suelo_' + (i - 1)" x-model="sueloSel[i - 1]" @change="const otros = sueloSel.filter((s, idx) => idx !== (i - 1) && idx < numAmbientes); if (sueloSel[i - 1] && otros.includes(sueloSel[i - 1])) sueloSel[i - 1] = '';" required class="min-w-0 border border-slate-200 rounded-lg px-1 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]">
+                  <option value="" disabled>Suelo...</option>
+                  {% for suelo in tipos_suelo %}<option value="{{ suelo.id }}">{{ suelo.nombre }}</option>{% endfor %}
+                </select>
+                <select :name="'rendimiento_' + (i - 1)" x-model="rendimientoSel[i - 1]" required class="min-w-0 border border-slate-200 rounded-lg px-1 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]">
+                  <option value="" disabled>Rinde...</option><option value="A">Alto</option><option value="M">Medio</option><option value="B">Bajo</option>
+                </select>
+                <input type="number" :name="'ha_' + (i - 1)" :value="haSel[i - 1]" min="0.01" step="any" required placeholder="ha" class="min-w-0 border border-slate-200 rounded-lg px-1 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]" />
+              </div>
+            </template>
+          </div>
+          <button type="submit" class="w-full px-3 py-1.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-lg text-xs transition">Guardar cambios del lote</button>
+        </form>
+      </details>
+
+      <!-- Toggle habilitado -->
+      <form
+        hx-post="{% url 'lote_toggle' lote.id %}"
+        hx-target="#main-content"
+        class="mt-4"
+      >
+        {% csrf_token %}
+        <button
+          type="submit"
+          class="w-full px-4 py-2 rounded-xl text-xs font-bold transition border {% if lote.habilitado %}bg-white hover:bg-red-50 text-red-700 border-red-200{% else %}bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white border-[#4d8b4f]{% endif %}"
+        >
+          {% if lote.habilitado %}Desactivar{% else %}Activar{% endif %}
+        </button>
+      </form>
+
       <!-- Separador -->
       <div class="my-4.5 border-t border-slate-200/50"></div>
 
-      <!-- Limitadores Pyomo -->
+      <!-- Historial del lote -->
       <details class="mt-4">
         <summary
           class="cursor-pointer text-sm font-semibold text-[#2f5e31] hover:text-[#4d8b4f] transition"
@@ -97,22 +203,146 @@
         </summary>
 
         <div class="mt-3 bg-slate-50 border border-slate-200/60 rounded-xl p-3">
-          <div
-            class="grid grid-cols-2 text-[11px] font-bold text-slate-500 uppercase border-b pb-2 mb-2"
-          >
-            <span>Campaña</span>
-            <span>Cultivo</span>
-          </div>
-
-          {% for historial in lote.historial %}
-          <div class="grid grid-cols-2 text-sm py-1">
-            <span>{{ historial.campania_mostrar }}</span>
-            <span>{{ historial.cultivo.nombre }}</span>
+          {% for campania in lote.historial %}
+          <div class="text-sm py-2 border-b border-slate-200/40 last:border-0">
+            <span class="font-bold text-slate-600"
+              >{{ campania.campania_mostrar }}</span
+            >
+            <span class="text-slate-700">
+              —
+              {% for h in campania.cultivos %}{{ h.cultivo.nombre|upper }}{% if h.rendimiento_kg_ha is not None %} ({{ h.rendimiento_kg_ha|floatformat:0 }} kg/ha){% endif %}{% if not forloop.last %} + {% endif %}{% endfor %}
+            </span>
+            <details class="mt-2">
+              <summary class="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-[#4d8b4f]">Editar campaña</summary>
+              <form hx-post="{% url 'lote_historial_add' lote.id %}" hx-target="#main-content" class="mt-2 space-y-2">
+                {% csrf_token %}
+                <input type="hidden" name="anio_inicio" value="{{ campania.anio_inicio }}" />
+                <div class="grid grid-cols-3 gap-2">
+                  <select name="cultivo_1" required class="col-span-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs">
+                    {% for cultivo in cultivos %}<option value="{{ cultivo.id }}" {% if cultivo.id == campania.cultivo_1.id %}selected{% endif %}>{{ cultivo.nombre }}</option>{% endfor %}
+                  </select>
+                  <input type="number" name="rendimiento_1" value="{{ campania.rendimiento_1|default_if_none:'' }}" min="0" step="any" placeholder="kg/ha" class="bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs" />
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <select name="cultivo_2" class="col-span-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs">
+                    <option value="">Sin segundo cultivo</option>
+                    {% for cultivo in cultivos %}<option value="{{ cultivo.id }}" {% if campania.cultivo_2 and cultivo.id == campania.cultivo_2.id %}selected{% endif %}>{{ cultivo.nombre }}</option>{% endfor %}
+                  </select>
+                  <input type="number" name="rendimiento_2" value="{{ campania.rendimiento_2|default_if_none:'' }}" min="0" step="any" placeholder="kg/ha" class="bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs" />
+                </div>
+                <button type="submit" class="w-full px-3 py-1.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-lg text-xs">Guardar campaña</button>
+              </form>
+              <form hx-post="{% url 'lote_historial_delete' lote.id campania.anio_inicio %}" hx-target="#main-content" onsubmit="return confirm('¿Seguro que querés eliminar toda esta campaña histórica?');" class="mt-2">
+                {% csrf_token %}
+                <button type="submit" class="w-full px-3 py-1.5 bg-white hover:bg-red-50 text-red-700 border border-red-200 font-bold rounded-lg text-xs">Eliminar campaña</button>
+              </form>
+            </details>
           </div>
           {% empty %}
           <p class="text-sm text-slate-400">Sin historial disponible.</p>
           {% endfor %}
+          <p class="mt-2 text-[10px] text-slate-400 italic">
+            El modelo considera las 3 campañas más recientes.
+          </p>
         </div>
+
+        <!-- Formulario: cargar historial -->
+        <form
+          hx-post="{% url 'lote_historial_add' lote.id %}"
+          hx-target="#main-content"
+          class="mt-3 bg-white border border-slate-200/60 rounded-xl p-3 space-y-2"
+        >
+          {% csrf_token %}
+          <p
+            class="text-[10px] font-bold text-slate-500 uppercase tracking-wider"
+          >
+            Agregar nueva campaña histórica
+          </p>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 mb-0.5"
+              >Campaña</label
+            >
+            <select
+              name="anio_inicio"
+              required
+              class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
+            >
+              <option value="" disabled selected>Seleccionar...</option>
+              {% for anio in anios_cargables %}
+              <option value="{{ anio.valor }}">{{ anio.etiqueta }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-2">
+              <label class="block text-[10px] font-bold text-slate-400 mb-0.5"
+                >Cultivo 1</label
+              >
+              <select
+                name="cultivo_1"
+                required
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
+              >
+                <option value="" disabled selected>Seleccionar...</option>
+                {% for cultivo in cultivos %}
+                <option value="{{ cultivo.id }}">{{ cultivo.nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 mb-0.5"
+                >Rinde (kg/ha)</label
+              >
+              <input
+                type="number"
+                name="rendimiento_1"
+                min="0"
+                step="any"
+                placeholder="Opcional"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-2">
+              <label class="block text-[10px] font-bold text-slate-400 mb-0.5"
+                >Cultivo 2 (opcional)</label
+              >
+              <select
+                name="cultivo_2"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
+              >
+                <option value="" selected>Sin segundo cultivo</option>
+                {% for cultivo in cultivos %}
+                <option value="{{ cultivo.id }}">{{ cultivo.nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 mb-0.5"
+                >Rinde (kg/ha)</label
+              >
+              <input
+                type="number"
+                name="rendimiento_2"
+                min="0"
+                step="any"
+                placeholder="Opcional"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full px-3 py-1.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-lg text-xs transition"
+          >
+            Agregar campaña
+          </button>
+        </form>
       </details>
     </div>
     {% empty %}
@@ -195,64 +425,108 @@
           class="space-y-4"
         >
           {% csrf_token %}
-          <div>
-            <label
-              class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
-              >Código del Lote</label
-            >
-            <input
-              type="text"
-              name="codigo"
-              required
-              placeholder="Ej: LOTE_08"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
-            />
+          {% if create_error %}
+          <div x-show="createErrorVisible" role="alert" class="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+            <span>{{ create_error }}</span>
+            <button type="button" @click="createErrorVisible = false" aria-label="Cerrar mensaje de error" class="shrink-0 rounded-md p-1 text-red-700 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-400">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
           </div>
-
+          {% endif %}
           <div>
             <label
               class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
-              >Nombre (Opcional)</label
+              >Nombre del Lote</label
             >
             <input
               type="text"
               name="nombre"
+              x-model="nombreLote"
+              required
               placeholder="Ej: Parcela Norte"
               class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
             />
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label
-                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
-                >Superficie (ha)</label
+          <div>
+            <label
+              class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+              >Cantidad de ambientes</label
+            >
+            <select
+              x-model.number="numAmbientes"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
+            >
+              <option value="1" selected>1 ambiente</option>
+              <option value="2">2 ambientes</option>
+              <option value="3">3 ambientes</option>
+            </select>
+          </div>
+
+          <!-- Filas dinámicas de ambientes -->
+          <div class="space-y-3">
+            <template x-for="i in numAmbientes" :key="i">
+              <div
+                class="grid grid-cols-3 gap-3 p-3 bg-slate-50 border border-slate-200/60 rounded-xl"
               >
-              <input
-                type="number"
-                step="0.01"
-                name="superficie_ha"
-                required
-                placeholder="Ej: 150"
-                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
-              />
-            </div>
-            <div>
-              <label
-                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
-                >Tipo de Suelo</label
-              >
-              <select
-                name="tipo_suelo"
-                required
-                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"
-              >
-                <option value="" disabled selected>Seleccionar...</option>
-                {% for suelo in tipos_suelo %}
-                <option value="{{ suelo.id }}">{{ suelo.nombre }}</option>
-                {% endfor %}
-              </select>
-            </div>
+                <div>
+                  <label
+                    class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5"
+                    >Suelo</label
+                  >
+                  <select
+                    :name="'suelo_' + (i - 1)"
+                    x-model="sueloSel[i - 1]"
+                    @change="
+                      const otros = sueloSel.filter((s, idx) => idx !== (i - 1) && idx < numAmbientes);
+                      if (sueloSel[i - 1] && otros.includes(sueloSel[i - 1])) { sueloSel[i - 1] = ''; }
+                    "
+                    required
+                    class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
+                  >
+                    <option value="" disabled selected>Seleccionar...</option>
+                    {% for suelo in tipos_suelo %}
+                    <option value="{{ suelo.id }}">{{ suelo.nombre }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5"
+                    >Rendimiento</label
+                  >
+                  <select
+                    :name="'rendimiento_' + (i - 1)"
+                    x-model="rendimientoSel[i - 1]"
+                    required
+                    class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
+                  >
+                    <option value="" disabled selected>Seleccionar...</option>
+                    <option value="A">Alto</option>
+                    <option value="M">Medio</option>
+                    <option value="B">Bajo</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5"
+                    >Hectáreas</label
+                  >
+                  <input
+                    type="number"
+                    :name="'ha_' + (i - 1)"
+                    x-model="haSel[i - 1]"
+                    min="0.01"
+                    step="any"
+                    required
+                    placeholder="Ej: 50"
+                    class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
+                  />
+                </div>
+              </div>
+            </template>
           </div>
 
           <div
