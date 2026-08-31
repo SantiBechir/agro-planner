@@ -82,6 +82,13 @@ class CultivoListDirectTest(TestCase):
         self.assertIn(expected_inicio, html)
         self.assertIn(expected_fin, html)
         self.assertIn("Habilitado", html)
+        self.assertIn("De Renta", html)
+        self.assertNotIn(">\n            Principal\n", html)
+
+    def test_cultivo_list_requires_authentication(self):
+        response = self.client.get("/cultivos/")
+
+        self.assertRedirects(response, "/login/?next=/cultivos/")
 
     def test_cultivo_list_shows_disabled_optimization_status(self):
         self.cultivo.habilitado_optimizacion = False
@@ -111,7 +118,7 @@ class CultivoListDirectTest(TestCase):
         self.assertIn("1 valor económico pendiente", html)
         self.assertNotIn("Pendiente de configuración económica", html)
 
-    def test_barbecho_does_not_request_economic_configuration(self):
+    def test_barbecho_is_not_listed(self):
         Cultivo.objects.create(
             codigo="BARBECHO",
             nombre="Barbecho",
@@ -127,7 +134,7 @@ class CultivoListDirectTest(TestCase):
         response = cultivo_list(request)
 
         html = response.content.decode('utf-8')
-        self.assertEqual(html.count("Sin precios ni costos configurados"), 1)
+        self.assertNotIn(">\n            BARBECHO\n", html)
 
 
 class LoteCreateDirectTest(TestCase):
@@ -199,14 +206,17 @@ class LoteCreateDirectTest(TestCase):
     def test_duplicate_nombre_rejected_case_insensitively(self):
         self._create_lote(codigo="J1", nombre="Parcela Norte")
 
-        response, msgs = self._post_create({
+        response, _ = self._post_create({
             "nombre": "parcela norte",
             "suelo_0": str(self.suelo1.id),
             "rendimiento_0": "M",
             "ha_0": "40",
         })
         self.assertEqual(response.status_code, 200)
-        self.assertIn('Ya existe un lote con el nombre "parcela norte"', msgs.text())
+        self.assertIn(
+            'Ya existe un lote con el nombre "parcela norte"',
+            response.content.decode("utf-8").replace("&quot;", '"'),
+        )
         self.assertEqual(Lote.objects.count(), 1)
 
     def test_duplicate_nombre_reopens_modal_and_preserves_ambientes(self):
@@ -261,13 +271,13 @@ class LoteCreateDirectTest(TestCase):
         self.assertEqual(lote_obj.ambientes.count(), 2)
 
     def test_create_without_ambientes_is_rejected(self):
-        response, msgs = self._post_create({"nombre": "Parcela Sin Ambientes"})
+        response, _ = self._post_create({"nombre": "Parcela Sin Ambientes"})
         self.assertEqual(response.status_code, 200)
-        self.assertIn("al menos un ambiente", msgs.text())
+        self.assertIn("al menos un ambiente", response.content.decode("utf-8"))
         self.assertFalse(Lote.objects.exists())
 
     def test_create_with_repeated_soil_is_rejected(self):
-        response, msgs = self._post_create({
+        response, _ = self._post_create({
             "nombre": "Parcela Repetida",
             "suelo_0": str(self.suelo1.id),
             "rendimiento_0": "A",
@@ -277,7 +287,7 @@ class LoteCreateDirectTest(TestCase):
             "ha_1": "70",
         })
         self.assertEqual(response.status_code, 200)
-        self.assertIn("repetir el mismo tipo de suelo", msgs.text())
+        self.assertIn("repetir el mismo tipo de suelo", response.content.decode("utf-8"))
         self.assertFalse(Lote.objects.exists())
 
     def test_invalid_ambiente_reopens_modal_and_preserves_submitted_values(self):
@@ -302,25 +312,25 @@ class LoteCreateDirectTest(TestCase):
 
     def test_create_with_non_positive_superficie_is_rejected(self):
         for ha_value in ("0", "-5", "abc"):
-            response, msgs = self._post_create({
+            response, _ = self._post_create({
                 "nombre": f"Parcela {ha_value}",
                 "suelo_0": str(self.suelo1.id),
                 "rendimiento_0": "A",
                 "ha_0": ha_value,
             })
             self.assertEqual(response.status_code, 200)
-            self.assertIn("mayor a cero", msgs.text())
+            self.assertIn("mayor a cero", response.content.decode("utf-8"))
         self.assertFalse(Lote.objects.exists())
 
     def test_create_with_invalid_rendimiento_is_rejected(self):
-        response, msgs = self._post_create({
+        response, _ = self._post_create({
             "nombre": "Parcela Rinde",
             "suelo_0": str(self.suelo1.id),
             "rendimiento_0": "X",
             "ha_0": "30",
         })
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Alto, Medio o Bajo", msgs.text())
+        self.assertIn("Alto, Medio o Bajo", response.content.decode("utf-8"))
         self.assertFalse(Lote.objects.exists())
 
 
@@ -765,7 +775,6 @@ class CultivoCreateDirectTest(TestCase):
     def test_cultivo_create_and_list(self):
         base_year = datetime.now().year
         data = {
-            "codigo": "GIRASOL",
             "nombre": "Girasol Hibrido",
             "tipo": "principal",
             "duracion_dias": "110",
@@ -790,7 +799,7 @@ class CultivoCreateDirectTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
         # Verify DB entries
-        cultivo_obj = Cultivo.objects.get(codigo="GIRASOL")
+        cultivo_obj = Cultivo.objects.get(codigo="GIRASOL HIBRIDO")
         self.assertEqual(cultivo_obj.nombre, "Girasol Hibrido")
         self.assertEqual(cultivo_obj.tipo, Cultivo.Tipo.PRINCIPAL)
         self.assertEqual(cultivo_obj.duracion_dias, 110)

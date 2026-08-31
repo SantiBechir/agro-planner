@@ -518,9 +518,12 @@ def lote_historial_delete(request, pk, anio_inicio):
 
 
 @login_required(login_url="login")
-def cultivo_list(request):
+def cultivo_list(request, form_data=None, open_modal=False):
     cultivos = (
-        Cultivo.objects.annotate(
+        Cultivo.objects.exclude(
+            Q(codigo__icontains="BARBECHO") | Q(nombre__icontains="BARBECHO")
+        )
+        .annotate(
             costos_totales=Count("costo"),
             costos_pendientes=Count(
                 "costo",
@@ -530,9 +533,6 @@ def cultivo_list(request):
         .prefetch_related("rendimientocultivosuelo_set__tipo_suelo")
         .order_by("codigo")
     )
-    tipos_suelo = TipoSuelo.objects.all().order_by("codigo")
-def cultivo_list(request, form_data=None, open_modal=False):
-    cultivos = Cultivo.objects.exclude(codigo="BARBECHO").prefetch_related("rendimientocultivosuelo_set__tipo_suelo").order_by("codigo")
     tipos_suelo = list(TipoSuelo.objects.all().order_by("codigo"))
     form_data = form_data or {}
     base_year = datetime.now().year
@@ -542,18 +542,15 @@ def cultivo_list(request, form_data=None, open_modal=False):
         suelo.form_value = form_data.get(f"rendimiento_{suelo.id}", "")
 
     for cultivo in cultivos:
-        cultivo.es_barbecho = (
-            "BARBECHO" in cultivo.codigo.upper()
-            or "BARBECHO" in cultivo.nombre.upper()
-        )
-
         # Calcular fechas de inicio y fin asumiendo campaña del 01/06 al 31/05 del año siguiente
         st_date = base_date + timedelta(days=int(cultivo.siembra_inicio) - 1)
         ht_date = base_date + timedelta(days=int(cultivo.siembra_fin) - 1)
         cultivo.siembra_inicio_fecha = st_date.strftime("%d/%m/%Y")
         cultivo.siembra_fin_fecha = ht_date.strftime("%d/%m/%Y")
-        cultivo.siembra_inicio_pct = (int(cultivo.siembra_inicio) / 365) * 100
-        cultivo.siembra_fin_pct = ((int(cultivo.siembra_fin) + 1) / 365) * 100
+        inicio_pct = (int(cultivo.siembra_inicio) / 365) * 100
+        fin_pct = ((int(cultivo.siembra_fin) + 1) / 365) * 100
+        cultivo.siembra_inicio_pct = f"{inicio_pct:.4f}"
+        cultivo.siembra_ancho_pct = f"{fin_pct - inicio_pct:.4f}"
 
         # Rendimientos por tipo de suelo
         cultivo.rendimientos = [
