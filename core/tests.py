@@ -907,7 +907,7 @@ class CostoListDirectTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
         html = response.content.decode('utf-8')
-        self.assertIn("Pagina 1 de 8", html)
+        self.assertIn("Página 1 de 8", html)
         self.assertIn("Siguiente", html)
 
     def test_costo_list_excludes_barbecho(self):
@@ -977,21 +977,26 @@ class CostoListDirectTest(TestCase):
         response = costo_list(request)
         self.assertEqual(response.status_code, 200)
 
-        html = response.content.decode('utf-8')
-        general_section = html.split("Costos generales", 1)[1].split(
-            "Costos de arrendamiento", 1
-        )[0]
-        rental_section = html.split("Costos de arrendamiento", 1)[1]
-
+        general_section = response.content.decode('utf-8').split(
+            "Precios y costos generales", 1
+        )[1]
         self.assertIn("Costo de cultivo", general_section)
-        self.assertIn("no incluye el costo de arrendamiento", general_section)
-        self.assertNotIn(">Lote</th>", general_section)
+        self.assertNotIn("Costo fijo de arrendamiento", general_section)
+        self.assertNotIn("Lote</th>", general_section)
+
+        request = self.factory.get(f'/costos/?tipo={arrendamiento.id}')
+        request.user = self.user
+
+        response = costo_list(request)
+        self.assertEqual(response.status_code, 200)
+
+        rental_section = response.content.decode('utf-8')
+
+        self.assertNotIn("Precios y costos generales", rental_section)
         self.assertIn("Costo fijo de arrendamiento", rental_section)
-        self.assertIn(">Lote</th>", rental_section)
+        self.assertIn("Lote</th>", rental_section)
         self.assertIn("L1", rental_section)
-        self.assertNotIn("Costo de siembra", html)
-        self.assertNotIn("Que considera", html)
-        self.assertIn("Campaña", html)
+        self.assertIn("Campaña", rental_section)
 
     def test_enables_crop_after_all_costs_are_reviewed(self):
         self.cultivo.habilitado_optimizacion = False
