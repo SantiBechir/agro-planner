@@ -18,6 +18,91 @@
     </div>
     {% endif %}
 
+    <div class="flex flex-wrap gap-2 pb-4">
+        <button type="button" hx-get="{% url 'costo_list' %}?tab=margenes" hx-target="#main-content" onclick="document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' })" class="px-4 py-2 rounded-xl text-sm font-bold transition {% if selected_tab == 'margenes' %}bg-[#2f5e31] text-white shadow-sm{% else %}bg-white border border-slate-300 text-slate-600 hover:bg-slate-100{% endif %}">Márgenes Brutos por Cultivo</button>
+        <button type="button" hx-get="{% url 'costo_list' %}?tab=indiferencia" hx-target="#main-content" onclick="document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' })" class="px-4 py-2 rounded-xl text-sm font-bold transition {% if selected_tab == 'indiferencia' %}bg-[#2f5e31] text-white shadow-sm{% else %}bg-white border border-slate-300 text-slate-600 hover:bg-slate-100{% endif %}">Rendimiento de Indiferencia</button>
+        <button type="button" hx-get="{% url 'costo_list' %}?tab=detalle" hx-target="#main-content" onclick="document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' })" class="px-4 py-2 rounded-xl text-sm font-bold transition {% if selected_tab == 'detalle' %}bg-[#2f5e31] text-white shadow-sm{% else %}bg-white border border-slate-300 text-slate-600 hover:bg-slate-100{% endif %}">Lista Detallada de Precios y Costos</button>
+    </div>
+
+    {% if show_standard_indicator_filters %}
+    <form hx-get="{% url 'costo_list' %}" hx-target="#main-content" class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-sm rounded-2xl p-5 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <input type="hidden" name="tab" value="{{ selected_tab }}">
+        {% if selected_tab == 'margenes' %}<input type="hidden" name="mb_view" value="{{ mb_view }}">{% endif %}
+        {% if selected_tab == 'indiferencia' %}<input type="hidden" name="ri_view" value="{{ ri_view }}">{% endif %}
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Campaña</label>
+            <select name="campania" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm">
+                <option value="">Todas</option>
+                {% for campania in campanias %}<option value="{{ campania.id }}" {% if selected_campania == campania.id|stringformat:"s" %}selected{% endif %}>{{ campania.nombre_mostrar }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cultivo</label>
+            <select name="cultivo" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm">
+                <option value="">Todos</option>
+                {% for cultivo in cultivos %}<option value="{{ cultivo.id }}" {% if selected_cultivo == cultivo.id|stringformat:"s" %}selected{% endif %}>{{ cultivo.codigo }}</option>{% endfor %}
+            </select>
+        </div>
+        {% if selected_tab == 'margenes' or selected_tab == 'indiferencia' %}<div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Suelo</label>
+            <select name="suelo" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm">
+                <option value="">Todos</option>
+                {% for suelo in suelos %}<option value="{{ suelo.id }}" {% if selected_suelo == suelo.id|stringformat:"s" %}selected{% endif %}>{{ suelo.nombre }}</option>{% endfor %}
+            </select>
+        </div>{% endif %}
+        <button type="submit" class="md:col-start-4 px-5 py-2.5 rounded-xl bg-[#4d8b4f] hover:bg-[#3d7440] text-white text-sm font-bold shadow-sm">Actualizar</button>
+    </form>
+    {% endif %}
+
+    {% if selected_tab == 'margenes' %}
+    <section class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-visible">
+        <div class="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/80 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+            <div><h2 class="text-lg font-extrabold tracking-tight text-[#2f5e31]">Márgenes Brutos por Cultivo</h2><p class="mt-1 text-xs font-semibold text-slate-500">Compará el margen por hectárea y la composición de sus costos directos.</p></div>
+            <div class="flex shrink-0 gap-2"><button type="button" hx-get="{% url 'costo_list' %}?tab=margenes&mb_view=grafico" hx-target="#main-content" class="rounded-lg px-3 py-2 text-xs font-bold {% if mb_view == 'grafico' %}bg-[#2f5e31] text-white{% else %}border border-slate-300 bg-white text-slate-600{% endif %}">Análisis de barras</button><button type="button" hx-get="{% url 'costo_list' %}?tab=margenes&mb_view=lista" hx-target="#main-content" class="rounded-lg px-3 py-2 text-xs font-bold {% if mb_view == 'lista' %}bg-[#2f5e31] text-white{% else %}border border-slate-300 bg-white text-slate-600{% endif %}">Lista</button></div>
+        </div>
+        {% if mb_view == 'grafico' %}
+        <div class="p-5 space-y-5">
+            <form hx-get="{% url 'costo_list' %}" hx-target="#main-content" class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_auto] md:items-start">
+                <input type="hidden" name="tab" value="margenes">
+                <div><label class="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">Campañas a comparar</label><div class="flex flex-wrap gap-2">{% for campania in campanias %}<label class="cursor-pointer"><input type="checkbox" name="mb_campania" value="{{ campania.id }}" {% if not mb_selected_campanias or campania.id|stringformat:"s" in mb_selected_campanias %}checked{% endif %} class="peer sr-only"><span class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition peer-checked:border-[#4d8b4f] peer-checked:bg-emerald-50 peer-checked:text-[#2f5e31]">{{ campania.nombre_mostrar }} <span class="hidden text-xs peer-checked:inline">●</span></span></label>{% endfor %}</div></div>
+                <div><label class="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">Suelos a comparar</label><div class="flex flex-wrap gap-2">{% for suelo in suelos %}<label class="cursor-pointer"><input type="checkbox" name="mb_suelo" value="{{ suelo.id }}" {% if not mb_selected_suelos or suelo.id|stringformat:"s" in mb_selected_suelos %}checked{% endif %} class="peer sr-only"><span class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition peer-checked:border-[#4d8b4f] peer-checked:bg-emerald-50 peer-checked:text-[#2f5e31]">{{ suelo.nombre }} <span class="hidden text-xs peer-checked:inline">●</span></span></label>{% endfor %}</div></div>
+                <div class="relative md:col-span-2"><label class="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">Cultivos a comparar</label><input id="mb-cultivo-mode" type="hidden" name="mb_cultivo_mode" value="{{ mb_cultivo_mode }}"><div id="mb-visible-selection" class="flex flex-wrap items-center gap-2">{% for cultivo in cultivos %}{% if mb_cultivo_mode == 'all' or cultivo.id|stringformat:"s" in mb_selected_cultivos %}<span class="inline-flex items-center rounded-lg border border-[#4d8b4f] bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-[#2f5e31]">{{ cultivo.codigo }}</span>{% endif %}{% endfor %}<button type="button" onclick="toggleMbCropPicker()" class="flex h-8 w-8 items-center justify-center rounded-lg border border-dashed border-[#4d8b4f] bg-white text-lg font-bold text-[#2f5e31] hover:bg-emerald-50" aria-label="Editar cultivos">+</button></div><div id="mb-crop-picker" class="hidden absolute z-20 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-xl"><div class="mb-3 flex gap-2 border-b border-slate-100 pb-3"><button type="button" onclick="setMbCropMode('all')" class="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-[#2f5e31]">Todos</button><button type="button" onclick="setMbCropMode('selected')" class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">Limpiar</button></div><div class="flex flex-wrap gap-2">{% for cultivo in cultivos %}<label class="cursor-pointer"><input type="checkbox" name="mb_cultivo" value="{{ cultivo.id }}" {% if mb_cultivo_mode == 'all' or cultivo.id|stringformat:"s" in mb_selected_cultivos %}checked{% endif %} onchange="document.getElementById('mb-cultivo-mode').value='selected'" class="peer sr-only"><span class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 transition peer-checked:border-[#4d8b4f] peer-checked:bg-emerald-50 peer-checked:text-[#2f5e31]">{{ cultivo.codigo }}</span></label>{% endfor %}</div><div class="mt-4 flex justify-end border-t border-slate-100 pt-3"><button type="button" onclick="applyMbCropSelection()" class="rounded-lg bg-[#4d8b4f] px-4 py-2 text-sm font-bold text-white hover:bg-[#3d7440]">Aplicar</button></div></div></div>
+                <button type="submit" class="rounded-xl bg-[#4d8b4f] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#3d7440] md:col-start-3 md:row-start-1 md:mt-7">Comparar</button>
+            </form>
+            {% if mb_cost_charts %}<section class="rounded-xl border border-slate-200 p-4"><h3 class="mb-4 font-extrabold text-[#2f5e31]">Comparación de la composición de costos</h3><div class="grid grid-cols-1 gap-4 lg:grid-cols-2">{% for grafico in mb_cost_charts %}<article class="rounded-xl border border-slate-100 bg-slate-50/60 p-3"><h4 class="text-sm font-extrabold text-slate-700">{{ grafico.cultivo }} <span class="font-semibold text-slate-500">· {{ grafico.suelo }} · {{ grafico.campania }}</span></h4><div class="mt-2 grid grid-cols-1 items-start gap-3 sm:grid-cols-[145px_minmax(0,1fr)]"><div class="relative z-10 h-[190px]"><div class="h-[150px]"><canvas data-mb-cost-chart data-chart="{{ grafico.chart_data }}"></canvas></div><p data-mb-cost-tooltip class="mt-1 min-h-8 text-center text-[11px] leading-4 font-semibold text-slate-600"></p></div><div class="relative z-0 max-h-[245px] overflow-auto rounded-lg border border-slate-200 bg-white"><table class="min-w-full text-[10px]"><thead class="bg-emerald-50/80"><tr><th class="px-2 py-1.5 text-left text-[9px] font-bold uppercase text-slate-500">Concepto</th><th class="px-2 py-1.5 text-right text-[9px] font-bold uppercase text-slate-500">Alto</th><th class="px-2 py-1.5 text-right text-[9px] font-bold uppercase text-slate-500">Medio</th><th class="px-2 py-1.5 text-right text-[9px] font-bold uppercase text-slate-500">Bajo</th></tr></thead><tbody class="divide-y divide-slate-100">{% for dato in grafico.detalle %}<tr{% if dato.row_color %} style="background-color: {{ dato.row_color }}"{% endif %}><td class="px-2 py-1 font-semibold text-slate-600">{% if dato.color %}<span class="mr-1 inline-block h-2 w-2 rounded-full align-middle" style="background-color: {{ dato.color }}"></span>{% endif %}{{ dato.label }}</td><td class="px-2 py-1 text-right text-slate-600">{% if dato.alto is not None %}{{ dato.alto|floatformat:2 }}{% else %}—{% endif %}</td><td class="px-2 py-1 text-right text-slate-700">{% if dato.medio is not None %}{{ dato.medio|floatformat:2 }}{% else %}—{% endif %}</td><td class="px-2 py-1 text-right text-slate-600">{% if dato.bajo is not None %}{{ dato.bajo|floatformat:2 }}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody></table></div></div></article>{% endfor %}</div></section>{% else %}<section class="rounded-xl border border-slate-200 p-4"><h3 class="mb-4 font-extrabold text-[#2f5e31]">Comparación de la composición de costos</h3><p class="py-16 text-center text-sm font-semibold text-slate-500">Elegí al menos un cultivo para ver su composición de costos.</p></section>{% endif %}
+        </div>
+        {% else %}
+        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200"><thead class="bg-emerald-50/80"><tr><th class="px-5 py-3 text-left text-[10px] font-bold uppercase text-slate-500">Cultivo</th><th class="px-5 py-3 text-left text-[10px] font-bold uppercase text-slate-500">Campaña</th><th class="px-5 py-3 text-left text-[10px] font-bold uppercase text-slate-500">Suelo</th><th class="px-5 py-3 text-left text-[10px] font-bold uppercase text-slate-500">Nivel</th><th class="px-5 py-3 text-right text-[10px] font-bold uppercase text-slate-500">Rinde (t/ha)</th><th class="px-5 py-3 text-right text-[10px] font-bold uppercase text-slate-500">Ingreso (USD/ha)</th><th class="px-5 py-3 text-right text-[10px] font-bold uppercase text-slate-500">Costos directos</th><th class="px-5 py-3 text-right text-[10px] font-bold uppercase text-slate-500">Margen bruto</th><th class="px-5 py-3 text-right text-[10px] font-bold uppercase text-slate-500">Margen c/arrend.</th></tr></thead><tbody class="divide-y divide-slate-100">{% for fila in margenes %}<tr class="hover:bg-emerald-50/40"><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ fila.cultivo }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ fila.campania }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ fila.suelo }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ fila.nivel_mostrar }}</td><td class="px-5 py-3 text-right text-sm text-slate-600">{{ fila.rendimiento_promedio|floatformat:2 }}</td><td class="px-5 py-3 text-right text-sm text-slate-600">{{ fila.ingreso|floatformat:2 }}</td><td class="px-5 py-3 text-right text-sm text-slate-600">{{ fila.costos_directos|floatformat:2 }}</td><td class="px-5 py-3 text-right text-sm font-extrabold {% if fila.margen < 0 %}text-red-700{% else %}text-[#2f5e31]{% endif %}">{{ fila.margen|floatformat:2 }}</td><td class="px-5 py-3 text-right text-sm font-extrabold text-slate-700">{{ fila.margen_con_arrendamiento|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="9" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay datos suficientes para calcular márgenes.</td></tr>{% endfor %}</tbody></table></div>
+        {% endif %}
+    </section>
+    {% elif selected_tab == 'indiferencia' %}
+    <section class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-visible">
+        <div class="px-5 py-4 border-b border-slate-200 bg-slate-50/80">
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div><h2 class="text-lg font-extrabold tracking-tight text-[#2f5e31]">Rendimiento de Indiferencia</h2></div>
+                <div class="flex gap-2"><button type="button" hx-get="{% url 'costo_list' %}?tab=indiferencia&ri_view=grafico" hx-target="#main-content" onclick="document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' })" class="px-3 py-2 rounded-lg text-xs font-bold {% if ri_view == 'grafico' %}bg-[#2f5e31] text-white{% else %}bg-white border border-slate-300 text-slate-600{% endif %}">Análisis de barras</button><button type="button" hx-get="{% url 'costo_list' %}?tab=indiferencia&ri_view=lista" hx-target="#main-content" onclick="document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' })" class="px-3 py-2 rounded-lg text-xs font-bold {% if ri_view == 'lista' %}bg-[#2f5e31] text-white{% else %}bg-white border border-slate-300 text-slate-600{% endif %}">Lista</button></div>
+            </div>
+        </div>
+        {% if ri_view == 'grafico' %}
+        <div class="p-5 space-y-5">
+            <form hx-get="{% url 'costo_list' %}" hx-target="#main-content" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-start">
+                <input type="hidden" name="tab" value="indiferencia"><input type="hidden" name="ri_view" value="grafico">
+                <div><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Campañas a comparar</label><div class="flex flex-wrap gap-2">{% for campania in campanias %}<label class="cursor-pointer"><input type="checkbox" name="ri_campania" value="{{ campania.id }}" {% if not ri_selected_campanias or campania.id|stringformat:"s" in ri_selected_campanias %}checked{% endif %} class="peer sr-only"><span class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition after:hidden after:h-4 after:w-4 after:items-center after:justify-center after:rounded-full after:bg-[#4d8b4f] after:text-[10px] after:text-white peer-checked:border-[#4d8b4f] peer-checked:bg-emerald-50 peer-checked:text-[#2f5e31] peer-checked:after:flex peer-checked:after:content-['✓']">{{ campania.nombre_mostrar }}</span></label>{% endfor %}</div></div>
+                <div><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Suelos a comparar</label><div class="flex flex-wrap gap-2">{% for suelo in suelos %}<label class="cursor-pointer"><input type="checkbox" name="ri_suelo" value="{{ suelo.id }}" {% if not ri_selected_suelos or suelo.id|stringformat:"s" in ri_selected_suelos %}checked{% endif %} class="peer sr-only"><span class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition after:hidden after:h-4 after:w-4 after:items-center after:justify-center after:rounded-full after:bg-[#4d8b4f] after:text-[10px] after:text-white peer-checked:border-[#4d8b4f] peer-checked:bg-emerald-50 peer-checked:text-[#2f5e31] peer-checked:after:flex peer-checked:after:content-['✓']">{{ suelo.nombre }}</span></label>{% endfor %}</div></div>
+                <div class="md:col-span-2 relative"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cultivos a comparar</label><input id="ri-cultivo-mode" type="hidden" name="ri_cultivo_mode" value="{{ ri_cultivo_mode }}"><div class="flex flex-wrap items-center gap-2">{% if ri_cultivo_mode == 'all' %}<span class="inline-flex items-center gap-2 rounded-lg border border-[#4d8b4f] bg-emerald-50 px-3 py-2 text-sm font-bold text-[#2f5e31]">Todos</span>{% else %}{% for cultivo in cultivos %}{% if cultivo.id|stringformat:"s" in ri_selected_cultivos %}<span class="inline-flex items-center gap-2 rounded-lg border border-[#4d8b4f] bg-emerald-50 px-3 py-2 text-sm font-bold text-[#2f5e31]">{{ cultivo.codigo }}</span>{% endif %}{% endfor %}{% endif %}<button type="button" onclick="toggleRiCropPicker()" class="flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-[#4d8b4f] bg-white text-xl font-bold text-[#2f5e31] hover:bg-emerald-50" aria-label="Agregar cultivos">+</button></div><div id="ri-crop-picker" class="hidden absolute z-20 mt-2 w-full max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-xl"><div class="mb-3 flex gap-2 border-b border-slate-100 pb-3"><button type="button" onclick="setRiCropMode('all')" class="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-[#2f5e31]">Todos</button><button type="button" onclick="setRiCropMode('selected')" class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">Limpiar</button></div><div class="flex flex-wrap gap-2">{% for cultivo in cultivos %}<label class="cursor-pointer"><input type="checkbox" name="ri_cultivo" value="{{ cultivo.id }}" {% if ri_cultivo_mode == 'all' or cultivo.id|stringformat:"s" in ri_selected_cultivos %}checked{% endif %} onchange="document.getElementById('ri-cultivo-mode').value='selected'" class="peer sr-only"><span class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition after:hidden after:h-4 after:w-4 after:items-center after:justify-center after:rounded-full after:bg-[#4d8b4f] after:text-[10px] after:text-white peer-checked:border-[#4d8b4f] peer-checked:bg-emerald-50 peer-checked:text-[#2f5e31] peer-checked:after:flex peer-checked:after:content-['✓']">{{ cultivo.codigo }}</span></label>{% endfor %}</div></div></div>
+                <button type="submit" class="md:col-start-3 md:row-start-1 md:mt-7 px-5 py-2.5 rounded-xl bg-[#4d8b4f] hover:bg-[#3d7440] text-white text-sm font-bold shadow-sm">Comparar</button>
+            </form>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div class="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4"><div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[#2f5e31]"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg></div><div><p class="text-xs font-bold text-slate-500">CAMPAÑAS COMPARADAS</p><p class="mt-1 text-2xl font-extrabold text-[#2f5e31]">{{ ri_chart_campaign_count }}</p></div></div><div class="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4"><div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[#2f5e31]"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></svg></div><div><p class="text-xs font-bold text-slate-500">SUELOS COMPARADOS</p><p class="mt-1 text-2xl font-extrabold text-[#2f5e31]">{{ ri_chart_soil_count }}</p></div></div><div class="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4"><div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[#2f5e31]"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 21V10"/><path d="M7 14c-2.5 0-4-1.8-4-4 2.5 0 4 1.8 4 4ZM17 14c2.5 0 4-1.8 4-4-2.5 0-4 1.8-4 4Z"/><path d="M12 10c0-3.3 2.2-5.5 5.5-5.5C17.5 7.8 15.3 10 12 10Z"/></svg></div><div><p class="text-xs font-bold text-slate-500">MAYOR RINDE DE INDIFERENCIA</p>{% if ri_maximo %}<p class="mt-1 text-2xl font-extrabold text-[#2f5e31]">{{ ri_maximo_kg }} kg/ha</p><p class="text-xs text-slate-600">{{ ri_maximo.suelo }} en {{ ri_maximo.cultivo }} ({{ ri_maximo.campania }})</p>{% else %}<p class="mt-1 text-sm font-semibold text-slate-500">Sin datos</p>{% endif %}</div></div></div>
+            <div class="rounded-xl border border-slate-200 p-4"><div class="flex items-center justify-between mb-3"><h3 class="font-extrabold text-[#2f5e31]">Rendimiento de indiferencia por cultivo</h3><span class="text-xs font-bold text-slate-500">kg/ha</span></div>{% if ri_chart_has_data %}<div class="h-[380px]"><canvas id="ri-bar-chart" data-chart="{{ ri_chart_data }}"></canvas></div><div class="mt-4 border-t border-slate-100 pt-4"><p class="mb-2 text-[11px] font-semibold text-slate-500">Seleccione una referencia para ocultarla o volver a mostrarla en el gráfico.</p><div class="flex flex-wrap gap-2">{% for item in ri_chart_legend %}<button type="button" data-ri-dataset="{{ item.index }}" onclick="toggleRiDataset(this)" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#4d8b4f]"><span class="h-3 w-3 rounded-full" style="background-color: {{ item.color }}"></span><span>{{ item.label }}</span><span class="text-base leading-none text-slate-400">×</span></button>{% endfor %}</div></div>{% else %}<p class="py-16 text-center text-sm font-semibold text-slate-500">No hay datos para los filtros seleccionados.</p>{% endif %}</div>
+        </div>
+        {% else %}
+        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-emerald-50/80"><tr><th rowspan="2" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Cultivo</th><th rowspan="2" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Campaña</th><th rowspan="2" class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Suelo</th><th colspan="3" class="px-5 py-3 text-center text-[10px] font-bold text-slate-500 uppercase">Nivel · Rinde estimado (t/ha)</th><th rowspan="2" class="px-5 py-3 text-right text-[10px] font-bold text-slate-500 uppercase">Precio neto (USD/t)</th><th rowspan="2" class="px-5 py-3 text-right text-[10px] font-bold text-slate-500 uppercase">Rinde indiferencia (t/ha)</th></tr><tr><th class="px-5 py-2 text-right text-[10px] font-bold text-slate-500 uppercase">Alto</th><th class="px-5 py-2 text-right text-[10px] font-bold text-slate-500 uppercase">Medio</th><th class="px-5 py-2 text-right text-[10px] font-bold text-slate-500 uppercase">Bajo</th></tr></thead>
+            <tbody class="divide-y divide-slate-100">{% for fila in indiferencias_agrupadas %}<tr class="hover:bg-emerald-50/40"><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ fila.cultivo }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ fila.campania }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ fila.suelo }}</td><td class="px-5 py-3 text-right text-sm text-slate-600">{% if fila.rendimiento_alto is not None %}{{ fila.rendimiento_alto|floatformat:2 }}{% else %}—{% endif %}</td><td class="px-5 py-3 text-right text-sm text-slate-600">{% if fila.rendimiento_medio is not None %}{{ fila.rendimiento_medio|floatformat:2 }}{% else %}—{% endif %}</td><td class="px-5 py-3 text-right text-sm text-slate-600">{% if fila.rendimiento_bajo is not None %}{{ fila.rendimiento_bajo|floatformat:2 }}{% else %}—{% endif %}</td><td class="px-5 py-3 text-right text-sm text-slate-600">{{ fila.precio_neto|floatformat:2 }}</td><td class="px-5 py-3 text-right text-sm font-extrabold text-[#2f5e31]">{% if fila.rendimiento_indiferencia is not None %}{{ fila.rendimiento_indiferencia|floatformat:2 }}{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay datos suficientes para calcular el rendimiento de indiferencia.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% endif %}
+    </section>
+    {% else %}
     {% if selected_cultivo_obj and not selected_cultivo_obj.habilitado_optimizacion %}
     <div class="p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-900 text-sm font-semibold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <span>{{ selected_cultivo_obj.codigo }} no participa en la optimizacion. Faltan revisar {{ costos_pendientes }} valores.</span>
@@ -65,128 +150,61 @@
         </form>
     </div>
 
-    <form hx-post="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.number }}" hx-target="#main-content" class="space-y-8">
+    {% if show_costo_cultivo_help %}
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-5 py-4 text-sm text-slate-700">
+        <h2 class="font-extrabold text-[#2f5e31]">¿Qué considera cada costo?</h2>
+        <div class="mt-2 text-xs leading-relaxed">
+            <p>Semillas, fertilizantes, fitosanitarios y labores de implantación y manejo.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form hx-post="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.number }}" hx-target="#main-content" class="space-y-6">
         {% csrf_token %}
-
+        {% if show_costos_generales %}
         <section class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-hidden">
-            <div class="px-5 py-4 border-b border-slate-200 bg-slate-50/80">
-                <h2 class="text-lg font-extrabold tracking-tight text-[#2f5e31]">Costos generales</h2>
-                <p class="mt-1 text-xs font-semibold text-slate-500">Costos independientes de los lotes. El costo de cultivo incluye semillas, fertilizantes, fitosanitarios y labores; no incluye el costo de arrendamiento.</p>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="bg-emerald-50/80">
-                        <tr>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cultivo</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Campaña</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valor</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Unidad</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        {% for costo in costos %}
-                        <tr class="{% if not costo.configurado %}bg-amber-50/50{% endif %} hover:bg-emerald-50/40 transition">
-                            <td class="px-5 py-3 whitespace-nowrap">
-                                <div class="text-sm font-bold text-slate-700">{{ costo.tipo_costo.descripcion_mostrar }}</div>
-                            </td>
-                            <td class="px-5 py-3 text-sm font-bold text-slate-700 whitespace-nowrap">{{ costo.cultivo.codigo }}</td>
-                            <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.campania_mostrar }}</td>
-                            <td class="px-5 py-3 whitespace-nowrap">
-                                <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                                {% if not costo.configurado %}
-                                <span class="ml-2 text-[9px] font-bold uppercase tracking-wider text-amber-700">Pendiente</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-5 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{{ costo.tipo_costo.unidad|default:"-" }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="5" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay precios o costos generales para los filtros seleccionados.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <p class="text-xs text-slate-500 font-semibold">Mostrando {{ page_obj.start_index }}-{{ page_obj.end_index }} de {{ paginator.count }} valores generales.</p>
-                    {% if page_obj.has_other_pages %}
-                    <div class="flex flex-wrap gap-2">
-                        {% if page_obj.has_previous %}
-                        <button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.previous_page_number }}&arrendamiento_page={{ arrendamiento_page_obj.number }}" hx-target="#main-content" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">Anterior</button>
-                        {% endif %}
-                        <span class="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Pagina {{ page_obj.number }} de {{ paginator.num_pages }}</span>
-                        {% if page_obj.has_next %}
-                        <button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.next_page_number }}&arrendamiento_page={{ arrendamiento_page_obj.number }}" hx-target="#main-content" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">Siguiente</button>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </section>
-
-        <section class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-hidden">
-            <div class="px-5 py-4 border-b border-slate-200 bg-slate-50/80">
-                <h2 class="text-lg font-extrabold tracking-tight text-[#2f5e31]">Costos de arrendamiento</h2>
-                <p class="mt-1 text-xs font-semibold text-slate-500">Costos fijos y variables de arrendamiento desagregados por cultivo, lote y campaña.</p>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200">
-                    <thead class="bg-emerald-50/80">
-                        <tr>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cultivo</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Campaña</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Lote</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valor</th>
-                            <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Unidad</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        {% for costo in costos_arrendamiento %}
-                        <tr class="{% if not costo.configurado %}bg-amber-50/50{% endif %} hover:bg-emerald-50/40 transition">
-                            <td class="px-5 py-3 whitespace-nowrap">
-                                <div class="text-sm font-bold text-slate-700">{{ costo.tipo_costo.descripcion_mostrar }}</div>
-                            </td>
-                            <td class="px-5 py-3 text-sm font-bold text-slate-700 whitespace-nowrap">{{ costo.cultivo.codigo }}</td>
-                            <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.campania_mostrar }}</td>
-                            <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.lote.codigo|default:"-" }}</td>
-                            <td class="px-5 py-3 whitespace-nowrap">
-                                <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
-                                {% if not costo.configurado %}
-                                <span class="ml-2 text-[9px] font-bold uppercase tracking-wider text-amber-700">Pendiente</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-5 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{{ costo.tipo_costo.unidad|default:"-" }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay costos de arrendamiento para los filtros seleccionados.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <p class="text-xs text-slate-500 font-semibold">Mostrando {{ arrendamiento_page_obj.start_index }}-{{ arrendamiento_page_obj.end_index }} de {{ arrendamiento_paginator.count }} valores de arrendamiento.</p>
-                    {% if arrendamiento_page_obj.has_other_pages %}
-                    <div class="flex flex-wrap gap-2">
-                        {% if arrendamiento_page_obj.has_previous %}
-                        <button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.previous_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">Anterior</button>
-                        {% endif %}
-                        <span class="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Pagina {{ arrendamiento_page_obj.number }} de {{ arrendamiento_paginator.num_pages }}</span>
-                        {% if arrendamiento_page_obj.has_next %}
-                        <button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.next_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">Siguiente</button>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </section>
-
-        <div class="bg-slate-50/80 px-5 py-4 border border-slate-200 rounded-2xl">
+        <div class="px-5 py-4 border-b border-slate-200 bg-slate-50/80">
+            <h2 class="text-lg font-extrabold tracking-tight text-[#2f5e31]">Precios y costos generales</h2>
+            <p class="mt-1 text-xs font-semibold text-slate-500">Valores independientes del lote.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-emerald-50/80">
+                    <tr>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cultivo</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Campaña</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valor</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Unidad</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for costo in costos %}
+                    <tr class="{% if not costo.configurado %}bg-amber-50/50{% endif %} hover:bg-emerald-50/40 transition">
+                        <td class="px-5 py-3 whitespace-nowrap">
+                            <div class="text-sm font-bold text-slate-700">
+                                {{ costo.tipo_costo.descripcion_mostrar }}
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-sm font-bold text-slate-700 whitespace-nowrap">{{ costo.cultivo.codigo }}</td>
+                        <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.campania_mostrar }}</td>
+                        <td class="px-5 py-3 whitespace-nowrap">
+                            <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                            {% if not costo.configurado %}
+                            <span class="ml-2 text-[9px] font-bold uppercase tracking-wider text-amber-700">Pendiente</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{{ costo.tipo_costo.unidad|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay precios o costos generales para los filtros seleccionados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200 space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <p class="text-xs text-slate-500 font-semibold">Los cambios se usaran en la proxima optimizacion que ejecutes.</p>
                 <div class="flex flex-wrap gap-2">
@@ -200,6 +218,44 @@
                     {% endif %}
                 </div>
             </div>
+
+            {% if page_obj.has_other_pages %}
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-200 pt-4">
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Página {{ page_obj.number }} de {{ paginator.num_pages }}</p>
+                <div class="flex flex-wrap gap-2">
+                    {% if page_obj.has_previous %}
+                    <button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.previous_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Anterior
+                    </button>
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                    <button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.next_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Siguiente
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
         </div>
+        </section>
+        {% endif %}
+
+        {% if show_costos_arrendamiento %}
+        <section class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 bg-slate-50/80">
+                <h2 class="text-lg font-extrabold tracking-tight text-[#2f5e31]">Costos de arrendamiento</h2>
+                <p class="mt-1 text-xs font-semibold text-slate-500">Costos fijos y variables diferenciados por cultivo, lote y campaña.</p>
+            </div>
+            <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-emerald-50/80"><tr>
+                    <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Tipo</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Cultivo</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Campaña</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Lote</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Valor</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Unidad</th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-100">{% for costo in costos_arrendamiento %}<tr class="{% if not costo.configurado %}bg-amber-50/50{% endif %} hover:bg-emerald-50/40 transition"><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ costo.tipo_costo.descripcion_mostrar }}</td><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ costo.cultivo.codigo }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ costo.campania_mostrar }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ costo.lote.codigo|default:"-" }}</td><td class="px-5 py-3"><input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"></td><td class="px-5 py-3 text-xs font-semibold text-slate-500">{{ costo.tipo_costo.unidad|default:"-" }}</td></tr>{% empty %}<tr><td colspan="6" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay costos de arrendamiento para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
+            </table></div>
+            {% if arrendamiento_page_obj.has_other_pages %}<div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200 flex items-center justify-between gap-3"><p class="text-xs font-bold text-slate-500 uppercase">Página {{ arrendamiento_page_obj.number }} de {{ arrendamiento_paginator.num_pages }}</p><div class="flex gap-2">{% if arrendamiento_page_obj.has_previous %}<button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.previous_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl text-xs">Anterior</button>{% endif %}{% if arrendamiento_page_obj.has_next %}<button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.next_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl text-xs">Siguiente</button>{% endif %}</div></div>{% endif %}
+            {% if not show_costos_generales %}<div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200 flex justify-end"><button type="submit" name="action" value="save" class="px-5 py-2.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">Guardar cambios</button></div>{% endif %}
+        </section>
+        {% endif %}
     </form>
+    {% endif %}
 </div>

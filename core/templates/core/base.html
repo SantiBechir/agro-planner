@@ -33,6 +33,189 @@
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
+    <!-- Gráficos de indicadores -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script>
+        function renderIndifferenceChart() {
+            const canvas = document.getElementById('ri-bar-chart');
+            if (!canvas || !canvas.dataset.chart || !window.Chart) return;
+
+            if (canvas._chart) canvas._chart.destroy();
+            const data = JSON.parse(canvas.dataset.chart);
+            canvas._chart = new Chart(canvas, {
+                type: 'bar',
+                data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    devicePixelRatio: Math.max(2, window.devicePixelRatio || 1),
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.dataset.label}: ${new Intl.NumberFormat('es-AR').format(context.raw)} kg/ha`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { weight: 'bold' } } },
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'kg/ha', font: { weight: 'bold' } },
+                            ticks: { callback: (value) => new Intl.NumberFormat('es-AR').format(value) }
+                        }
+                    }
+                }
+            });
+        }
+        function renderMarginCharts() {
+            const showMarginTooltip = ({ chart, tooltip }) => {
+                const tooltipText = chart.canvas.parentElement?.parentElement?.querySelector('[data-mb-cost-tooltip]');
+                if (!tooltipText) return;
+                if (!tooltip.opacity || !tooltip.dataPoints?.length) {
+                    tooltipText.textContent = '';
+                    return;
+                }
+
+                const point = tooltip.dataPoints[0];
+                const total = point.dataset.data.reduce((sum, value) => sum + Number(value || 0), 0);
+                const percentage = total ? Math.round((Number(point.raw) / total) * 100) : 0;
+                const title = document.createElement('span');
+                title.className = 'block font-extrabold text-slate-700';
+                title.textContent = point.label;
+                const value = document.createElement('span');
+                value.className = 'block text-slate-600';
+                value.textContent = `USD ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(point.raw)} · ${percentage}%`;
+                tooltipText.replaceChildren(title, value);
+            };
+            const costCanvases = document.querySelectorAll('[data-mb-cost-chart]');
+            costCanvases.forEach((costCanvas) => {
+                if (!costCanvas.dataset.chart || !window.Chart) return;
+                if (costCanvas._chart) costCanvas._chart.destroy();
+                costCanvas._chart = new Chart(costCanvas, {
+                    type: 'doughnut', data: JSON.parse(costCanvas.dataset.chart),
+                    options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(2, window.devicePixelRatio || 1), cutout: '60%', plugins: { legend: { display: false }, tooltip: { enabled: false, external: showMarginTooltip } } }
+                });
+            });
+        }
+        function toggleRiDataset(button) {
+            const canvas = document.getElementById('ri-bar-chart');
+            const chart = canvas?._chart;
+            if (!chart) return;
+            const index = Number(button.dataset.riDataset);
+            const visible = chart.isDatasetVisible(index);
+            chart.setDatasetVisibility(index, !visible);
+            chart.update();
+            button.classList.toggle('opacity-40', visible);
+            button.classList.toggle('line-through', visible);
+        }
+        function formatRiMaximumYield() {
+            document.querySelectorAll('p').forEach((element) => {
+                const match = element.textContent.trim().match(/^(\d+) kg\/ha$/);
+                if (match) {
+                    element.textContent = `${new Intl.NumberFormat('es-AR').format(Number(match[1]))} kg/ha`;
+                }
+            });
+        }
+        function toggleRiCropPicker() {
+            const picker = document.getElementById('ri-crop-picker');
+            if (!picker) return;
+            if (!picker.querySelector('[data-ri-crop-apply]')) {
+                const footer = document.createElement('div');
+                footer.className = 'mt-4 flex justify-end border-t border-slate-100 pt-3';
+                footer.innerHTML = '<button type="button" data-ri-crop-apply onclick="applyRiCropSelection()" class="rounded-lg bg-[#4d8b4f] px-4 py-2 text-sm font-bold text-white hover:bg-[#3d7440]">Aplicar</button>';
+                picker.appendChild(footer);
+            }
+            picker.classList.toggle('hidden');
+        }
+        function setRiCropMode(mode) {
+            const picker = document.getElementById('ri-crop-picker');
+            const modeInput = document.getElementById('ri-cultivo-mode');
+            if (!picker || !modeInput) return;
+            modeInput.value = mode;
+            picker.querySelectorAll('input[name="ri_cultivo"]').forEach((input) => {
+                input.checked = mode === 'all';
+            });
+        }
+        function syncRiCropSelection() {
+            const picker = document.getElementById('ri-crop-picker');
+            const modeInput = document.getElementById('ri-cultivo-mode');
+            if (!picker || !modeInput) return;
+
+            const inputs = Array.from(picker.querySelectorAll('input[name="ri_cultivo"]'));
+            const selected = inputs.filter((input) => input.checked);
+            modeInput.value = selected.length === inputs.length ? 'all' : 'selected';
+
+            const visibleSelection = picker.previousElementSibling;
+            visibleSelection.innerHTML = '';
+            selected.forEach((input) => {
+                const chip = document.createElement('span');
+                chip.className = 'inline-flex items-center gap-2 rounded-lg border border-[#4d8b4f] bg-emerald-50 px-3 py-2 text-sm font-bold text-[#2f5e31]';
+                chip.textContent = input.nextElementSibling.textContent.trim();
+                visibleSelection.appendChild(chip);
+            });
+            const addButton = document.createElement('button');
+            addButton.type = 'button';
+            addButton.onclick = toggleRiCropPicker;
+            addButton.className = 'flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-[#4d8b4f] bg-white text-xl font-bold text-[#2f5e31] hover:bg-emerald-50';
+            addButton.setAttribute('aria-label', 'Agregar cultivos');
+            addButton.textContent = '+';
+            visibleSelection.appendChild(addButton);
+        }
+        function applyRiCropSelection() {
+            const picker = document.getElementById('ri-crop-picker');
+            syncRiCropSelection();
+            picker.classList.add('hidden');
+        }
+        function toggleMbCropPicker() {
+            const picker = document.getElementById('mb-crop-picker');
+            if (picker) picker.classList.toggle('hidden');
+        }
+        function setMbCropMode(mode) {
+            const picker = document.getElementById('mb-crop-picker');
+            const modeInput = document.getElementById('mb-cultivo-mode');
+            if (!picker || !modeInput) return;
+            modeInput.value = mode;
+            picker.querySelectorAll('input[name="mb_cultivo"]').forEach((input) => { input.checked = mode === 'all'; });
+        }
+        function syncMbCropSelection() {
+            const picker = document.getElementById('mb-crop-picker');
+            const modeInput = document.getElementById('mb-cultivo-mode');
+            const visibleSelection = document.getElementById('mb-visible-selection');
+            if (!picker || !modeInput || !visibleSelection) return;
+            const inputs = Array.from(picker.querySelectorAll('input[name="mb_cultivo"]'));
+            const selected = inputs.filter((input) => input.checked);
+            modeInput.value = selected.length === inputs.length ? 'all' : 'selected';
+            visibleSelection.innerHTML = '';
+            selected.forEach((input) => {
+                const chip = document.createElement('span');
+                chip.className = 'inline-flex items-center rounded-lg border border-[#4d8b4f] bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-[#2f5e31]';
+                chip.textContent = input.nextElementSibling.textContent.trim();
+                visibleSelection.appendChild(chip);
+            });
+            const addButton = document.createElement('button');
+            addButton.type = 'button'; addButton.onclick = toggleMbCropPicker;
+            addButton.className = 'flex h-8 w-8 items-center justify-center rounded-lg border border-dashed border-[#4d8b4f] bg-white text-lg font-bold text-[#2f5e31] hover:bg-emerald-50';
+            addButton.setAttribute('aria-label', 'Editar cultivos'); addButton.textContent = '+';
+            visibleSelection.appendChild(addButton);
+        }
+        function applyMbCropSelection() {
+            syncMbCropSelection();
+            document.getElementById('mb-crop-picker')?.classList.add('hidden');
+        }
+        document.addEventListener('DOMContentLoaded', renderIndifferenceChart);
+        document.addEventListener('htmx:afterSettle', renderIndifferenceChart);
+        document.addEventListener('DOMContentLoaded', renderMarginCharts);
+        document.addEventListener('htmx:afterSettle', renderMarginCharts);
+        document.addEventListener('DOMContentLoaded', formatRiMaximumYield);
+        document.addEventListener('htmx:afterSettle', formatRiMaximumYield);
+        document.addEventListener('DOMContentLoaded', syncRiCropSelection);
+        document.addEventListener('htmx:afterSettle', syncRiCropSelection);
+        document.addEventListener('DOMContentLoaded', syncMbCropSelection);
+        document.addEventListener('htmx:afterSettle', syncMbCropSelection);
+    </script>
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -41,6 +224,14 @@
             background-position: center;
             background-attachment: fixed;
             min-height: 100vh;
+        }
+        #main-content {
+            overflow-anchor: none;
+        }
+        #ri-cultivo-mode + div span,
+        #ri-crop-picker label span {
+            font-size: 0.75rem;
+            padding: 0.35rem 0.6rem;
         }
         /* Custom scrollbar */
         ::-webkit-scrollbar {
