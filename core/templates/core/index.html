@@ -289,14 +289,14 @@ Control - AgroPlanner{% endblock %} {% block content %}
             <div
               class="inline-block h-9 w-9 rounded-xl bg-white/15 border border-white/10 flex items-center justify-center text-white font-bold"
             >
-              {{ request.user.username|make_list|first|upper }}
+              {{ request.user.display_name|make_list|first|upper }}
             </div>
             <div class="ml-3 truncate">
               <p class="text-sm font-bold text-white truncate">
-                {{ request.user.username }}
+                {{ request.user.display_name }}
               </p>
               <p class="text-[10px] text-emerald-200 tracking-wider">
-                ADMINISTRADOR
+                {{ request.user.functional_role|upper }}
               </p>
             </div>
           </div>
@@ -357,7 +357,7 @@ Control - AgroPlanner{% endblock %} {% block content %}
         <div
           class="inline-block h-8 w-8 rounded-xl bg-white/15 flex items-center justify-center text-white font-bold text-sm"
         >
-          {{ request.user.username|make_list|first|upper }}
+          {{ request.user.display_name|make_list|first|upper }}
         </div>
       </div>
     </div>
@@ -373,7 +373,7 @@ Control - AgroPlanner{% endblock %} {% block content %}
             class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit"
           >
             <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">
-              Bienvenido, {{ request.user.username }}
+              Bienvenido, {{ request.user.display_name }}
             </h1>
           </div>
         </div>

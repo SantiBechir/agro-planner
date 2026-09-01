@@ -43,11 +43,11 @@
             <form class="space-y-5" action="{% url 'login' %}" method="POST">
                 {% csrf_token %}
                 <div>
-                    <label for="username" class="block text-sm font-semibold text-[#2f5e31]">Usuario o Email</label>
+                    <label for="email" class="block text-sm font-semibold text-[#2f5e31]">Correo electrónico</label>
                     <div class="mt-1.5">
-                        <input id="username" name="username" type="text" required autocomplete="username" 
+                        <input id="email" name="email" type="email" required autocomplete="email"
                             class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 placeholder-slate-400 focus:border-[#4d8b4f] focus:outline-none focus:ring-1 focus:ring-[#4d8b4f] sm:text-sm transition duration-200"
-                            placeholder="santi">
+                            placeholder="nombre@ejemplo.com">
                     </div>
                 </div>
 

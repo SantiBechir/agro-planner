@@ -29,14 +29,14 @@
         Listado completo de los lotes registrados y sus características
       </p>
     </div>
-    <div>
+    {% if request.user.can_edit_agricultural_data %}<div>
       <button
         @click="resetCreateForm()"
         class="px-5 py-3 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition-all duration-300 shadow-md shadow-emerald-700/10 transform hover:scale-[1.01]"
       >
         + Agregar Lote
       </button>
-    </div>
+    </div>{% endif %}
   </div>
 
   <!-- Mensajes -->
@@ -123,6 +123,7 @@
       </div>
 
       <!-- Edición completa del lote -->
+      {% if request.user.can_edit_agricultural_data %}
       <details
         class="mt-4"
         x-data="{
@@ -190,6 +191,7 @@
           {% if lote.habilitado %}Desactivar{% else %}Activar{% endif %}
         </button>
       </form>
+      {% endif %}
 
       <!-- Separador -->
       <div class="my-4.5 border-t border-slate-200/50"></div>
@@ -212,7 +214,7 @@
               —
               {% for h in campania.cultivos %}{{ h.cultivo.nombre|upper }}{% if h.rendimiento_kg_ha is not None %} ({{ h.rendimiento_kg_ha|floatformat:0 }} kg/ha){% endif %}{% if not forloop.last %} + {% endif %}{% endfor %}
             </span>
-            <details class="mt-2">
+            {% if request.user.can_edit_agricultural_data %}<details class="mt-2">
               <summary class="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-[#4d8b4f]">Editar campaña</summary>
               <form hx-post="{% url 'lote_historial_add' lote.id %}" hx-target="#main-content" class="mt-2 space-y-2">
                 {% csrf_token %}
@@ -236,7 +238,7 @@
                 {% csrf_token %}
                 <button type="submit" class="w-full px-3 py-1.5 bg-white hover:bg-red-50 text-red-700 border border-red-200 font-bold rounded-lg text-xs">Eliminar campaña</button>
               </form>
-            </details>
+            </details>{% endif %}
           </div>
           {% empty %}
           <p class="text-sm text-slate-400">Sin historial disponible.</p>
@@ -247,6 +249,7 @@
         </div>
 
         <!-- Formulario: cargar historial -->
+        {% if request.user.can_edit_agricultural_data %}
         <form
           hx-post="{% url 'lote_historial_add' lote.id %}"
           hx-target="#main-content"
@@ -343,6 +346,7 @@
             Agregar campaña
           </button>
         </form>
+        {% endif %}
       </details>
     </div>
     {% empty %}
@@ -378,6 +382,7 @@
   </div>
 
   <!-- Modal de Agregar Lote -->
+  {% if request.user.can_edit_agricultural_data %}
   <div
     x-show="showModal"
     class="fixed inset-0 z-50 overflow-y-auto"
@@ -550,4 +555,5 @@
       </div>
     </div>
   </div>
+  {% endif %}
 </div>

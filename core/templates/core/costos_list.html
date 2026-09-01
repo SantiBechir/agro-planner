@@ -159,8 +159,12 @@
     </div>
     {% endif %}
 
+    {% if request.user.can_edit_agricultural_data %}
     <form hx-post="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.number }}" hx-target="#main-content" class="space-y-6">
         {% csrf_token %}
+    {% else %}
+    <div class="space-y-8">
+    {% endif %}
         {% if show_costos_generales %}
         <section class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-hidden">
         <div class="px-5 py-4 border-b border-slate-200 bg-slate-50/80">
@@ -189,7 +193,11 @@
                         <td class="px-5 py-3 text-sm font-bold text-slate-700 whitespace-nowrap">{{ costo.cultivo.codigo }}</td>
                         <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.campania_mostrar }}</td>
                         <td class="px-5 py-3 whitespace-nowrap">
+                            {% if request.user.can_edit_agricultural_data %}
                             <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                            {% else %}
+                            <span class="text-sm font-bold text-slate-700">{{ costo.valor|floatformat:2 }}</span>
+                            {% endif %}
                             {% if not costo.configurado %}
                             <span class="ml-2 text-[9px] font-bold uppercase tracking-wider text-amber-700">Pendiente</span>
                             {% endif %}
@@ -205,6 +213,7 @@
             </table>
         </div>
         <div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200 space-y-4">
+            {% if request.user.can_edit_agricultural_data %}
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <p class="text-xs text-slate-500 font-semibold">Los cambios se usaran en la proxima optimizacion que ejecutes.</p>
                 <div class="flex flex-wrap gap-2">
@@ -218,6 +227,7 @@
                     {% endif %}
                 </div>
             </div>
+            {% endif %}
 
             {% if page_obj.has_other_pages %}
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-200 pt-4">
@@ -250,12 +260,12 @@
                 <thead class="bg-emerald-50/80"><tr>
                     <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Tipo</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Cultivo</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Campaña</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Lote</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Valor</th><th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Unidad</th>
                 </tr></thead>
-                <tbody class="divide-y divide-slate-100">{% for costo in costos_arrendamiento %}<tr class="{% if not costo.configurado %}bg-amber-50/50{% endif %} hover:bg-emerald-50/40 transition"><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ costo.tipo_costo.descripcion_mostrar }}</td><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ costo.cultivo.codigo }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ costo.campania_mostrar }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ costo.lote.codigo|default:"-" }}</td><td class="px-5 py-3"><input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]"></td><td class="px-5 py-3 text-xs font-semibold text-slate-500">{{ costo.tipo_costo.unidad|default:"-" }}</td></tr>{% empty %}<tr><td colspan="6" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay costos de arrendamiento para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
+                <tbody class="divide-y divide-slate-100">{% for costo in costos_arrendamiento %}<tr class="{% if not costo.configurado %}bg-amber-50/50{% endif %} hover:bg-emerald-50/40 transition"><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ costo.tipo_costo.descripcion_mostrar }}</td><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ costo.cultivo.codigo }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ costo.campania_mostrar }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ costo.lote.codigo|default:"-" }}</td><td class="px-5 py-3">{% if request.user.can_edit_agricultural_data %}<input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">{% else %}<span class="text-sm font-bold text-slate-700">{{ costo.valor|floatformat:2 }}</span>{% endif %}</td><td class="px-5 py-3 text-xs font-semibold text-slate-500">{{ costo.tipo_costo.unidad|default:"-" }}</td></tr>{% empty %}<tr><td colspan="6" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No hay costos de arrendamiento para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
             </table></div>
             {% if arrendamiento_page_obj.has_other_pages %}<div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200 flex items-center justify-between gap-3"><p class="text-xs font-bold text-slate-500 uppercase">Página {{ arrendamiento_page_obj.number }} de {{ arrendamiento_paginator.num_pages }}</p><div class="flex gap-2">{% if arrendamiento_page_obj.has_previous %}<button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.previous_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl text-xs">Anterior</button>{% endif %}{% if arrendamiento_page_obj.has_next %}<button type="button" hx-get="{% url 'costo_list' %}?tipo={{ selected_tipo }}&campania={{ selected_campania }}&cultivo={{ selected_cultivo }}&page={{ page_obj.number }}&arrendamiento_page={{ arrendamiento_page_obj.next_page_number }}" hx-target="#main-content" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl text-xs">Siguiente</button>{% endif %}</div></div>{% endif %}
-            {% if not show_costos_generales %}<div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200 flex justify-end"><button type="submit" name="action" value="save" class="px-5 py-2.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">Guardar cambios</button></div>{% endif %}
+            {% if request.user.can_edit_agricultural_data and not show_costos_generales %}<div class="bg-slate-50/80 px-5 py-4 border-t border-slate-200 flex justify-end"><button type="submit" name="action" value="save" class="px-5 py-2.5 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-700/10">Guardar cambios</button></div>{% endif %}
         </section>
         {% endif %}
-    </form>
+    {% if request.user.can_edit_agricultural_data %}</form>{% else %}</div>{% endif %}
     {% endif %}
 </div>

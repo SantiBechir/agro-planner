@@ -1,9 +1,10 @@
 from django.test import TestCase, RequestFactory
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from io import StringIO
 from unittest.mock import patch
 from core.views import cultivo_list, lote_list, lote_create, lote_update, lote_toggle, lote_historial_add, lote_historial_delete, cultivo_create, costo_list, ejecutar_optimizacion
+from accounts.roles import EDITOR_ROLE, READER_ROLE, set_functional_role
 from core.models import Ambiente, Cultivo, TipoSuelo, RendimientoCultivoSuelo, Lote, CompatibilidadCultivoSuelo, TipoCosto, Costo, Campania, CampaniaHistorica, HistorialLoteCultivo, Planificacion
 from core.management.commands.process_optimizations import Command as ProcessOptimizationsCommand
 from core.management.commands.cargar_input import (
@@ -14,6 +15,9 @@ from core.management.commands.deploy_release import Command as DeployReleaseComm
 from core.services.optimization_inputs import build_pyomo_input_data
 from django.template.loader import render_to_string
 from datetime import date, datetime, timedelta
+
+
+User = get_user_model()
 
 
 class RecordingMessages:
@@ -37,7 +41,13 @@ class RecordingMessages:
 
 class CultivoListDirectTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, READER_ROLE)
         self.factory = RequestFactory()
         
         # Create TipoSuelo
@@ -139,7 +149,13 @@ class CultivoListDirectTest(TestCase):
 
 class LoteCreateDirectTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
         self.suelo2 = TipoSuelo.objects.create(codigo="S2", nombre="Alfisol")
@@ -336,7 +352,13 @@ class LoteCreateDirectTest(TestCase):
 
 class LoteToggleTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
         self.lote = Lote.objects.create(
@@ -369,7 +391,13 @@ class LoteToggleTest(TestCase):
 
 class LoteUpdateDirectTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
         self.suelo2 = TipoSuelo.objects.create(codigo="S2", nombre="Alfisol")
@@ -446,7 +474,13 @@ class LoteUpdateDirectTest(TestCase):
 
 class LoteHistorialAddTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
         self.lote = Lote.objects.create(
@@ -636,7 +670,13 @@ class LoteHistorialAddTest(TestCase):
 
 class LoteListHistorialGroupingTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
         self.lote = Lote.objects.create(
@@ -745,7 +785,13 @@ class CampaniaHistoricaEtiquetaTest(TestCase):
 
 class CultivoCreateDirectTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Suelo 1")
         self.campania1 = Campania.objects.create(codigo="C1", orden=1)
@@ -838,7 +884,13 @@ class CultivoCreateDirectTest(TestCase):
 
 class CostoListDirectTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.cultivo = Cultivo.objects.create(
             codigo="SOJA_TEST",
@@ -1032,7 +1084,13 @@ class CostoListDirectTest(TestCase):
 
 class EjecutarOptimizacionDirectTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="testuser", password="password")
+        self.user = User.objects.create_user(
+            email="testuser@example.com",
+            first_name="Test",
+            last_name="User",
+            password="password",
+        )
+        set_functional_role(self.user, READER_ROLE)
         self.factory = RequestFactory()
 
     def test_creates_pending_job_without_running_solver_in_request(self):

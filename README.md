@@ -19,11 +19,18 @@ cp .env.example .env
 # 4. Correr migraciones
 python manage.py migrate
 
-# 5. Levantar servidor
+# 5. Crear el primer superusuario (solicita email, nombre y apellido)
+python manage.py createsuperuser
+
+# 6. Levantar servidor
 python manage.py runserver
 ```
 
 El endpoint `GET /` debe devolver `OK`.
+
+La autenticación usa el correo electrónico como identificador. Los usuarios se
+crean explícitamente con `createsuperuser` o desde Django Admin; ninguna
+migración crea cuentas ni contiene contraseñas.
 
 ## Variables de entorno
 

@@ -4,11 +4,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from core.services.economic_indicators import build_economic_indicators
+from accounts.roles import editor_required, has_editor_access
 from core.models import (
     Ambiente,
     Lote,
@@ -137,10 +140,15 @@ def login_view(request):
         return redirect("home")
 
     if request.method == "POST":
-        usuario = request.POST.get("username")
+        correo = (request.POST.get("email") or "").strip().lower()
         clave = request.POST.get("password")
 
-        user = authenticate(request, username=usuario, password=clave)
+        try:
+            validate_email(correo)
+        except ValidationError:
+            user = None
+        else:
+            user = authenticate(request, email=correo, password=clave)
         if user is not None:
             login(request, user)
             return redirect("home")
@@ -299,67 +307,65 @@ def _raw_ambientes(request):
 
 
 @login_required(login_url="login")
+@editor_required
+@require_POST
 def lote_create(request):
-    if request.method == "POST":
-        nombre = (request.POST.get("nombre") or "").strip()
-        ambientes_raw = _raw_ambientes(request)
-        ambientes_data, error = _parse_ambientes(request)
-        if not nombre:
-            error = "El nombre del lote es obligatorio."
-        elif Lote.objects.filter(nombre__iexact=nombre).exists():
-            error = f'Ya existe un lote con el nombre "{nombre}".'
+    nombre = (request.POST.get("nombre") or "").strip()
+    ambientes_raw = _raw_ambientes(request)
+    ambientes_data, error = _parse_ambientes(request)
+    if not nombre:
+        error = "El nombre del lote es obligatorio."
+    elif Lote.objects.filter(nombre__iexact=nombre).exists():
+        error = f'Ya existe un lote con el nombre "{nombre}".'
 
-        if error is None:
-            superficie_total = sum(ha for _, _, ha in ambientes_data)
-            # Dominant soil bridge for the solver: soil with the most ha
-            suelo_dominante = max(
-                ambientes_data, key=lambda item: item[2]
-            )[0]
+    if error is None:
+        superficie_total = sum(ha for _, _, ha in ambientes_data)
+        # Dominant soil bridge for the solver: soil with the most ha
+        suelo_dominante = max(ambientes_data, key=lambda item: item[2])[0]
 
-            try:
-                with transaction.atomic():
-                    lote = Lote.objects.create(
-                        codigo=_next_lote_codigo(),
-                        nombre=nombre,
-                        superficie_ha=superficie_total,
-                        max_cultivos_principales=10,
-                        max_cultivos_secundarios=10,
-                        tipo_suelo=suelo_dominante,
-                        habilitado=True,
-                    )
-                    Ambiente.objects.bulk_create(
-                        [
-                            Ambiente(
-                                lote=lote,
-                                tipo_suelo=suelo,
-                                rendimiento_esperado=rendimiento,
-                                superficie_ha=ha,
-                            )
-                            for suelo, rendimiento, ha in ambientes_data
-                        ]
-                    )
-            except IntegrityError:
-                # The database constraint also protects the gap between the
-                # case-insensitive existence check and the insert.
-                error = f'Ya existe un lote con el nombre "{nombre}".'
-            else:
-                messages.success(
-                    request,
-                    f"Lote {lote.codigo} ({nombre}) creado con éxito.",
+        try:
+            with transaction.atomic():
+                lote = Lote.objects.create(
+                    codigo=_next_lote_codigo(),
+                    nombre=nombre,
+                    superficie_ha=superficie_total,
+                    max_cultivos_principales=10,
+                    max_cultivos_secundarios=10,
+                    tipo_suelo=suelo_dominante,
+                    habilitado=True,
                 )
-
-        if error is not None:
-            return lote_list(
+                Ambiente.objects.bulk_create(
+                    [
+                        Ambiente(
+                            lote=lote,
+                            tipo_suelo=suelo,
+                            rendimiento_esperado=rendimiento,
+                            superficie_ha=ha,
+                        )
+                        for suelo, rendimiento, ha in ambientes_data
+                    ]
+                )
+        except IntegrityError:
+            error = f'Ya existe un lote con el nombre "{nombre}".'
+        else:
+            messages.success(
                 request,
-                create_error=error,
-                create_nombre=nombre,
-                create_ambientes=ambientes_raw,
+                f"Lote {lote.codigo} ({nombre}) creado con éxito.",
             )
+
+    if error is not None:
+        return lote_list(
+            request,
+            create_error=error,
+            create_nombre=nombre,
+            create_ambientes=ambientes_raw,
+        )
 
     return lote_list(request)
 
 
 @login_required(login_url="login")
+@editor_required
 @require_POST
 def lote_update(request, pk):
     lote = get_object_or_404(Lote, pk=pk)
@@ -399,18 +405,21 @@ def lote_update(request, pk):
 
 
 @login_required(login_url="login")
+@editor_required
+@require_POST
 def lote_toggle(request, pk):
-    if request.method == "POST":
-        lote = get_object_or_404(Lote, pk=pk)
-        lote.habilitado = not lote.habilitado
-        lote.save(update_fields=["habilitado"])
-        estado = "activado" if lote.habilitado else "desactivado"
-        messages.success(request, f"Lote {lote.codigo} {estado}.")
+    lote = get_object_or_404(Lote, pk=pk)
+    lote.habilitado = not lote.habilitado
+    lote.save(update_fields=["habilitado"])
+    estado = "activado" if lote.habilitado else "desactivado"
+    messages.success(request, f"Lote {lote.codigo} {estado}.")
 
     return lote_list(request)
 
 
 @login_required(login_url="login")
+@editor_required
+@require_POST
 def lote_historial_add(request, pk):
     if request.method == "POST":
         lote = get_object_or_404(Lote, pk=pk)
@@ -506,6 +515,7 @@ def lote_historial_add(request, pk):
 
 
 @login_required(login_url="login")
+@editor_required
 @require_POST
 def lote_historial_delete(request, pk, anio_inicio):
     lote = get_object_or_404(Lote, pk=pk)
@@ -582,6 +592,8 @@ def cultivo_list(request, form_data=None, open_modal=False):
 
 
 @login_required(login_url="login")
+@editor_required
+@require_POST
 def cultivo_create(request):
     if request.method == "POST":
         nombre = request.POST.get("nombre")
@@ -758,6 +770,8 @@ def costo_list(request):
         selected_cultivo_obj = Cultivo.objects.filter(pk=selected_cultivo).first()
 
     if request.method == "POST":
+        if not has_editor_access(request.user):
+            raise PermissionDenied
         posted_values = {
             key.removeprefix("costo_"): value.strip().replace(",", ".")
             for key, value in request.POST.items()
@@ -1254,19 +1268,16 @@ def planificacion_list(request):
 
 
 @login_required(login_url="login")
+@require_POST
 def ejecutar_optimizacion(request):
-    if request.method == "POST":
-        nombre = request.POST.get("nombre", f"Planificación {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    nombre = request.POST.get("nombre", f"Planificación {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-        # Crear planificación pendiente
-        planificacion = Planificacion.objects.create(
-            nombre=nombre,
-            estado=Planificacion.Estado.PENDIENTE
-        )
+    planificacion = Planificacion.objects.create(
+        nombre=nombre,
+        estado=Planificacion.Estado.PENDIENTE
+    )
 
-        return redirect("planificacion_status", pk=planificacion.id)
-
-    return redirect("planificacion_list")
+    return redirect("planificacion_status", pk=planificacion.id)
 
 
 @login_required(login_url="login")

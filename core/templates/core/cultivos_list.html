@@ -14,14 +14,14 @@
         parámetros agrónomos.
       </p>
     </div>
-    <div>
+    {% if request.user.can_edit_agricultural_data %}<div>
       <button
         @click="showModal = true"
         class="px-5 py-3 bg-[#4d8b4f] hover:bg-[#3d6f3f] text-white font-bold rounded-xl text-sm transition-all duration-300 shadow-md shadow-emerald-700/10 transform hover:scale-[1.01]"
       >
         + Agregar Cultivo
       </button>
-    </div>
+    </div>{% endif %}
   </div>
 
   <!-- Mensajes -->
@@ -113,9 +113,9 @@
       {% if cultivo.costos_totales == 0 %}
         <div class="mt-4 flex items-center justify-between gap-2 text-red-800 bg-red-50 border border-red-200 p-2 rounded-xl text-[10px] font-semibold leading-normal">
           <span>Sin precios ni costos configurados</span>
-          <button hx-get="{% url 'costo_list' %}?cultivo={{ cultivo.id }}" hx-target="#main-content" class="whitespace-nowrap font-bold underline hover:text-red-950">
+          {% if request.user.can_edit_agricultural_data %}<button hx-get="{% url 'costo_list' %}?cultivo={{ cultivo.id }}" hx-target="#main-content" class="whitespace-nowrap font-bold underline hover:text-red-950">
             Configurar
-          </button>
+          </button>{% endif %}
         </div>
         {% elif cultivo.costos_pendientes > 0 %}
         <div class="mt-4 flex items-center justify-between gap-2 text-amber-800 bg-amber-50 border border-amber-200 p-2 rounded-xl text-[10px] font-semibold leading-normal">
@@ -126,16 +126,16 @@
               {{ cultivo.costos_pendientes }} valores económicos pendientes
             {% endif %}
           </span>
-          <button hx-get="{% url 'costo_list' %}?cultivo={{ cultivo.id }}" hx-target="#main-content" class="whitespace-nowrap font-bold underline hover:text-amber-950">
+          {% if request.user.can_edit_agricultural_data %}<button hx-get="{% url 'costo_list' %}?cultivo={{ cultivo.id }}" hx-target="#main-content" class="whitespace-nowrap font-bold underline hover:text-amber-950">
             Configurar
-          </button>
+          </button>{% endif %}
         </div>
         {% elif not cultivo.habilitado_optimizacion %}
         <div class="mt-4 flex items-center justify-between gap-2 text-emerald-800 bg-emerald-50 border border-emerald-200 p-2 rounded-xl text-[10px] font-semibold leading-normal">
           <span>Costos completos; pendiente de habilitar</span>
-          <button hx-get="{% url 'costo_list' %}?cultivo={{ cultivo.id }}" hx-target="#main-content" class="whitespace-nowrap font-bold underline hover:text-emerald-950">
+          {% if request.user.can_edit_agricultural_data %}<button hx-get="{% url 'costo_list' %}?cultivo={{ cultivo.id }}" hx-target="#main-content" class="whitespace-nowrap font-bold underline hover:text-emerald-950">
             Revisar
-          </button>
+          </button>{% endif %}
         </div>
       {% endif %}
 
@@ -235,6 +235,7 @@
     {% endfor %}
   </div>
   <!-- Modal de Agregar Cultivo -->
+  {% if request.user.can_edit_agricultural_data %}
   <div
     x-show="showModal"
     class="fixed inset-0 z-50 overflow-y-auto"
@@ -448,4 +449,5 @@
       </div>
     </div>
   </div>
+  {% endif %}
 </div>
