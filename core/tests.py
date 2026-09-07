@@ -1,11 +1,13 @@
 from django.test import TestCase, RequestFactory
 from django.conf import settings
+from django.core.management.base import CommandError
+from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from io import StringIO
 from unittest.mock import patch
 from core.views import cultivo_list, lote_list, lote_create, lote_update, lote_toggle, lote_historial_add, lote_historial_delete, cultivo_create, costo_list, ejecutar_optimizacion
 from accounts.roles import EDITOR_ROLE, READER_ROLE, set_functional_role
-from core.models import Ambiente, Cultivo, TipoSuelo, RendimientoCultivoSuelo, Lote, CompatibilidadCultivoSuelo, TipoCosto, Costo, Campania, CampaniaHistorica, HistorialLoteCultivo, Planificacion
+from core.models import Ambiente, Cultivo, TipoSuelo, RendimientoCultivoSuelo, Lote, CompatibilidadCultivoSuelo, TipoCosto, Costo, Campania, CampaniaHistorica, HistorialLoteCultivo, LimiteSuperficieCultivoCampania, Planificacion
 from core.management.commands.process_optimizations import Command as ProcessOptimizationsCommand
 from core.management.commands.cargar_input import (
     Command as CargarInputCommand,
@@ -13,11 +15,42 @@ from core.management.commands.cargar_input import (
 )
 from core.management.commands.deploy_release import Command as DeployReleaseCommand
 from core.services.optimization_inputs import build_pyomo_input_data
+from core.services.costos import COMPONENTES_SIEMBRA, calcular_costo_siembra
+from core.services.input_v51 import InputValidationError, read_and_validate_input_v51
 from django.template.loader import render_to_string
 from datetime import date, datetime, timedelta
 
 
 User = get_user_model()
+
+
+class LimiteSuperficieCultivoCampaniaTest(TestCase):
+    def setUp(self):
+        self.cultivo = Cultivo.objects.create(
+            codigo="TRIGO_LIMITE",
+            nombre="Trigo límite",
+            tipo=Cultivo.Tipo.PRINCIPAL,
+            duracion_dias=120,
+            siembra_inicio=1,
+            siembra_fin=60,
+        )
+        self.campania = Campania.objects.create(codigo="C1", orden=1)
+
+    def test_rejects_negative_or_inverted_limits(self):
+        with self.assertRaises(ValidationError):
+            LimiteSuperficieCultivoCampania(
+                cultivo=self.cultivo,
+                campania=self.campania,
+                min_ha=-1,
+                max_ha=10,
+            ).full_clean()
+        with self.assertRaises(ValidationError):
+            LimiteSuperficieCultivoCampania(
+                cultivo=self.cultivo,
+                campania=self.campania,
+                min_ha=11,
+                max_ha=10,
+            ).full_clean()
 
 
 class RecordingMessages:
@@ -813,7 +846,7 @@ class CultivoCreateDirectTest(TestCase):
             tipo_suelo=self.suelo1,
         )
         for codigo in (
-            "fsp", "sc", "hc", "frc", "vr", "tf",
+            "fsp", *COMPONENTES_SIEMBRA, "hc", "frc", "vr", "tf",
             "scp", "cp", "st", "cst", "clt",
         ):
             TipoCosto.objects.create(codigo=codigo, descripcion=codigo)
@@ -861,7 +894,7 @@ class CultivoCreateDirectTest(TestCase):
         self.assertTrue(compat.compatible)
 
         costos = Costo.objects.filter(cultivo=cultivo_obj)
-        self.assertEqual(costos.count(), 23)
+        self.assertEqual(costos.count(), 31)
         self.assertFalse(costos.filter(configurado=True).exists())
         self.assertEqual(
             costos.filter(tipo_costo__codigo="fsp", campania__isnull=False).count(),
@@ -1000,8 +1033,8 @@ class CostoListDirectTest(TestCase):
             tipo_suelo=suelo,
         )
         costo_cultivo = TipoCosto.objects.create(
-            codigo="sc",
-            descripcion="Sowing cost",
+            codigo="sc_seed",
+            descripcion="Seed cost",
             unidad="USD/ha",
         )
         arrendamiento = TipoCosto.objects.create(
@@ -1032,7 +1065,7 @@ class CostoListDirectTest(TestCase):
         general_section = response.content.decode('utf-8').split(
             "Precios y costos generales", 1
         )[1]
-        self.assertIn("Costo de cultivo", general_section)
+        self.assertIn("Semillas", general_section)
         self.assertNotIn("Costo fijo de arrendamiento", general_section)
         self.assertNotIn("Lote</th>", general_section)
 
@@ -1080,6 +1113,33 @@ class CostoListDirectTest(TestCase):
         self.costo.refresh_from_db()
         self.assertTrue(self.costo.configurado)
         self.assertTrue(self.cultivo.habilitado_optimizacion)
+
+    def test_sowing_components_are_editable_and_total_is_read_only(self):
+        values = [10.0, 20.0, 30.0, 40.0, 50.0]
+        for code, value in zip(COMPONENTES_SIEMBRA, values):
+            cost_type = TipoCosto.objects.create(
+                codigo=code, descripcion=code, unidad="USD/ha"
+            )
+            Costo.objects.create(
+                cultivo=self.cultivo,
+                tipo_costo=cost_type,
+                campania=self.campania,
+                valor=value,
+            )
+
+        request = self.factory.get(f"/costos/?cultivo={self.cultivo.id}")
+        request.user = self.user
+        response = costo_list(request)
+        html = response.content.decode("utf-8")
+
+        self.assertIn("Costo total de siembra", html)
+        self.assertIn("150", html)
+        self.assertNotIn('name="costo_total_siembra"', html)
+        for code in COMPONENTES_SIEMBRA:
+            cost = Costo.objects.get(
+                cultivo=self.cultivo, tipo_costo__codigo=code
+            )
+            self.assertIn(f'name="costo_{cost.id}"', html)
 
 
 class EjecutarOptimizacionDirectTest(TestCase):
@@ -1254,32 +1314,163 @@ class OptimizationInputsTest(TestCase):
 
         self.assertEqual(data["xh_dict"][("TRIGO", "J1", "CH2")], 0)
 
+    def test_derives_sowing_cost_and_exposes_surface_limits(self):
+        _, cultivo = self._crear_lote_cultivo()
+        campania = Campania.objects.create(codigo="C1", orden=1)
+        for index, code in enumerate(COMPONENTES_SIEMBRA, start=1):
+            cost_type = TipoCosto.objects.create(
+                codigo=code, descripcion=code, unidad="USD/ha"
+            )
+            Costo.objects.create(
+                cultivo=cultivo,
+                tipo_costo=cost_type,
+                campania=campania,
+                valor=index * 10,
+            )
+        LimiteSuperficieCultivoCampania.objects.create(
+            cultivo=cultivo, campania=campania, min_ha=15, max_ha=120
+        )
+
+        data = build_pyomo_input_data()
+
+        self.assertEqual(data["sc_dict"][("TRIGO", "C1")], 150)
+        self.assertEqual(data["minha_dict"][("TRIGO", "C1")], 15)
+        self.assertEqual(data["maxha_dict"][("TRIGO", "C1")], 120)
+
 
 class CargarInputHistorialMappingTest(TestCase):
-    def test_input_v1_imports_soil_names_and_configured_costs(self):
-        input_path = settings.BASE_DIR / "docs" / "Input v1.xlsx"
+    def test_input_v51_imports_the_complete_snapshot(self):
+        input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
 
-        CargarInputCommand().handle(archivo=str(input_path))
+        CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path))
 
         self.assertEqual(TipoSuelo.objects.get(codigo="S1").nombre, "Molisol")
         self.assertEqual(TipoSuelo.objects.get(codigo="S2").nombre, "Alfisol")
         self.assertEqual(TipoSuelo.objects.get(codigo="S3").nombre, "Vertisol")
-        self.assertTrue(Costo.objects.exists())
+        self.assertEqual(Lote.objects.filter(habilitado=True).count(), 10)
+        self.assertEqual(Cultivo.objects.filter(habilitado_optimizacion=True).count(), 20)
+        self.assertEqual(Campania.objects.count(), 3)
+        self.assertEqual(LimiteSuperficieCultivoCampania.objects.count(), 60)
+        self.assertEqual(TipoCosto.objects.count(), 15)
+        self.assertFalse(Cultivo.objects.filter(codigo="VICIA").exists())
+        self.assertTrue(Cultivo.objects.filter(codigo="VICIA CS").exists())
+        self.assertFalse(TipoCosto.objects.filter(codigo="sc").exists())
         self.assertFalse(Costo.objects.filter(configurado=False).exists())
 
-    @patch("core.management.commands.cargar_input.pd.read_excel")
-    def test_tipo_suelo_uses_business_names(self, read_excel):
-        import pandas as pd
+        for lote in Lote.objects.prefetch_related("ambientes"):
+            self.assertAlmostEqual(
+                sum(ambiente.superficie_ha for ambiente in lote.ambientes.all()),
+                lote.superficie_ha,
+            )
+            self.assertTrue(
+                all(
+                    ambiente.rendimiento_esperado in {"A", "M", "B"}
+                    for ambiente in lote.ambientes.all()
+                )
+            )
 
-        sets = pd.DataFrame([[None] * 6 for _ in range(3)])
-        sets.iloc[:, 5] = ["S1", "S2", "S3"]
-        read_excel.return_value = sets
+        cultivo = Cultivo.objects.get(codigo="COLZA")
+        campania = Campania.objects.get(codigo="C1")
+        components = {
+            costo.tipo_costo.codigo: costo.valor
+            for costo in Costo.objects.filter(
+                cultivo=cultivo,
+                campania=campania,
+                tipo_costo__codigo__in=COMPONENTES_SIEMBRA,
+            ).select_related("tipo_costo")
+        }
+        self.assertEqual(len(components), 5)
+        self.assertAlmostEqual(calcular_costo_siembra(components), 442.65)
 
-        CargarInputCommand()._cargar_tipos_suelo(object())
+    def test_validate_only_does_not_write(self):
+        input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
 
-        self.assertEqual(TipoSuelo.objects.get(codigo="S1").nombre, "Molisol")
-        self.assertEqual(TipoSuelo.objects.get(codigo="S2").nombre, "Alfisol")
-        self.assertEqual(TipoSuelo.objects.get(codigo="S3").nombre, "Vertisol")
+        CargarInputCommand(stdout=StringIO()).handle(
+            archivo=str(input_path), validar=True
+        )
+
+        self.assertEqual(Cultivo.objects.count(), 0)
+        self.assertEqual(Costo.objects.count(), 0)
+
+    def test_import_is_idempotent(self):
+        input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
+        command = CargarInputCommand(stdout=StringIO())
+        command.handle(archivo=str(input_path))
+        first_counts = (
+            Cultivo.objects.count(),
+            Lote.objects.count(),
+            Ambiente.objects.count(),
+            Costo.objects.count(),
+            LimiteSuperficieCultivoCampania.objects.count(),
+        )
+
+        command.handle(archivo=str(input_path))
+
+        self.assertEqual(
+            first_counts,
+            (
+                Cultivo.objects.count(),
+                Lote.objects.count(),
+                Ambiente.objects.count(),
+                Costo.objects.count(),
+                LimiteSuperficieCultivoCampania.objects.count(),
+            ),
+        )
+
+    def test_import_disables_absent_entities_and_removes_legacy_sc(self):
+        input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
+        stale_soil = TipoSuelo.objects.create(codigo="S_OLD", nombre="Viejo")
+        stale_crop = Cultivo.objects.create(
+            codigo="VICIA",
+            nombre="Vicia anterior",
+            tipo=Cultivo.Tipo.SECUNDARIO,
+            duracion_dias=90,
+            siembra_inicio=1,
+            siembra_fin=30,
+        )
+        stale_lot = Lote.objects.create(
+            codigo="J_OLD",
+            nombre="Lote anterior",
+            superficie_ha=20,
+            max_cultivos_principales=1,
+            max_cultivos_secundarios=1,
+            tipo_suelo=stale_soil,
+        )
+        legacy_type = TipoCosto.objects.create(
+            codigo="sc", descripcion="Costo agregado", unidad="USD/ha"
+        )
+        Costo.objects.create(
+            cultivo=stale_crop, tipo_costo=legacy_type, valor=100
+        )
+
+        CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path))
+
+        stale_crop.refresh_from_db()
+        stale_lot.refresh_from_db()
+        self.assertFalse(stale_crop.habilitado_optimizacion)
+        self.assertFalse(stale_lot.habilitado)
+        self.assertFalse(TipoCosto.objects.filter(codigo="sc").exists())
+
+    @patch("core.management.commands.cargar_input.persist_input_v51")
+    def test_import_rolls_back_if_persistence_fails(self, persist_mock):
+        input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
+
+        def fail_after_write(data):
+            TipoSuelo.objects.create(codigo="ROLLBACK", nombre="Temporal")
+            raise RuntimeError("fallo simulado")
+
+        persist_mock.side_effect = fail_after_write
+        with self.assertRaises(CommandError):
+            CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path))
+
+        self.assertFalse(TipoSuelo.objects.filter(codigo="ROLLBACK").exists())
+
+    def test_reader_rejects_missing_required_sheet(self):
+        input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
+        fake_excel = type("FakeExcel", (), {"sheet_names": ["Sets"]})()
+        with patch("core.services.input_v51.pd.ExcelFile", return_value=fake_excel):
+            with self.assertRaisesRegex(InputValidationError, "Faltan hojas"):
+                read_and_validate_input_v51(input_path)
 
     def test_ch_columns_map_to_years_before_current_campaign(self):
         # No Campania rows -> base falls back to ANIO_INICIO_CAMPANIA_ACTUAL (2025)
@@ -1322,7 +1513,7 @@ class CargarInputHistorialMappingTest(TestCase):
 class DeployReleaseCommandTest(TestCase):
     @patch.dict("os.environ", {}, clear=True)
     @patch("core.management.commands.deploy_release.call_command")
-    def test_release_migrates_and_loads_input_v1(self, call_command_mock):
+    def test_release_migrates_and_loads_input_v51(self, call_command_mock):
         DeployReleaseCommand().handle()
 
         self.assertEqual(call_command_mock.call_args_list[0].args, ("migrate",))
@@ -1337,7 +1528,7 @@ class DeployReleaseCommandTest(TestCase):
         self.assertTrue(
             call_command_mock.call_args_list[1].args[1]
             .replace("\\", "/")
-            .endswith("docs/Input v1.xlsx")
+            .endswith("docs/Input v5.1.xlsx")
         )
 
 

@@ -5,10 +5,10 @@ from collections import defaultdict
 from django.db.models import Q
 
 from core.models import Campania, CompatibilidadCultivoSuelo, Costo, Cultivo, Lote
+from core.services.costos import calcular_sc_para_cultivo_campania
 
 
-# Same productivity scenarios used by Plan. agrícola_v5.py.  They are only
-# applied to analytical displays; they do not modify optimization inputs.
+# Escenarios de productividad del modelo v5.1.
 PRODUCTIVITY_LEVELS = {"A": 1.2, "M": 1.0, "B": 0.8}
 
 
@@ -85,7 +85,10 @@ def _cost_values(cultivos):
 
 
 def _campania_label(campania):
-    inicio = 2024 + campania.orden
+    if campania.fecha_inicio:
+        inicio = campania.fecha_inicio.year
+    else:
+        inicio = 2024 + campania.orden
     return f"{inicio}/{inicio + 1}"
 
 
@@ -96,7 +99,15 @@ def _inputs_for(cultivo_id, campania_id, values):
             values.get((cultivo_id, code, None, None), 0.0),
         )
 
-    return {code: value(code) for code in ("fsp", "sc", "hc", "tf", "scp", "cp", "st", "cst", "clt")}
+    inputs = {
+        code: value(code)
+        for code in ("fsp", "hc", "tf", "scp", "cp", "st", "cst", "clt")
+    }
+    sc_val = calcular_sc_para_cultivo_campania(
+        values, cultivo_id, campania_id
+    )
+    inputs["sc"] = sc_val if sc_val > 0 or not value("sc") else value("sc")
+    return inputs
 
 
 def _average_rental_per_hectare(cultivos, campanias):
@@ -122,7 +133,7 @@ def _average_rental_per_hectare(cultivos, campanias):
                 variable_rate = costs.get(
                     (cultivo.id, "vr", campania.id, lote.id), 0.0
                 )
-                total_fixed += fixed
+                total_fixed += fixed * lote.superficie_ha
                 total_variable_rate += variable_rate * lote.superficie_ha
                 total_area += lote.superficie_ha
             result[(cultivo.id, campania.id)] = (
@@ -144,13 +155,13 @@ def _margin_row(cultivo, campania, suelo, level, yield_ton_ha, inputs, rental):
     commercial = inputs["tf"] * price * yield_ton_ha
     conditioning = inputs["scp"] * inputs["cp"] * yield_ton_ha
     transport = (
-        inputs["st"] * inputs["cst"] + (1 - inputs["st"]) * inputs["clt"]
+        inputs["st"] * inputs["cst"] + inputs["clt"]
     ) * yield_ton_ha
     gross_income = price * yield_ton_ha
     direct_costs = cultivation + harvest + commercial + conditioning + transport
     variable_rent = price * variable_rent_rate * yield_ton_ha
     price_net = price * (1 - inputs["tf"]) - inputs["scp"] * inputs["cp"] - (
-        inputs["st"] * inputs["cst"] + (1 - inputs["st"]) * inputs["clt"]
+        inputs["st"] * inputs["cst"] + inputs["clt"]
     )
     break_even = (cultivation + harvest) / price_net if price_net > 0 else None
 

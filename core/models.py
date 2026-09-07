@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
 
@@ -153,6 +154,52 @@ class Costo(models.Model):
 
     def __str__(self):
         return f"{self.tipo_costo.codigo} - {self.cultivo.codigo}"
+
+
+class LimiteSuperficieCultivoCampania(models.Model):
+    cultivo = models.ForeignKey(
+        Cultivo, on_delete=models.CASCADE, related_name="limites_superficie"
+    )
+    campania = models.ForeignKey(
+        Campania, on_delete=models.CASCADE, related_name="limites_superficie"
+    )
+    min_ha = models.FloatField(default=0.0)
+    max_ha = models.FloatField(default=0.0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cultivo", "campania"],
+                name="unique_limite_cultivo_campania",
+            ),
+            models.CheckConstraint(
+                check=models.Q(min_ha__gte=0)
+                & models.Q(max_ha__gte=0)
+                & models.Q(min_ha__lte=models.F("max_ha")),
+                name="chk_limite_superficie_min_lte_max",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.min_ha is not None and self.min_ha < 0:
+            raise ValidationError({"min_ha": "El valor mínimo no puede ser negativo."})
+        if self.max_ha is not None and self.max_ha < 0:
+            raise ValidationError({"max_ha": "El valor máximo no puede ser negativo."})
+        if (
+            self.min_ha is not None
+            and self.max_ha is not None
+            and self.min_ha > self.max_ha
+        ):
+            raise ValidationError(
+                "El valor mínimo de hectáreas no puede ser mayor que el máximo."
+            )
+
+    def __str__(self):
+        return (
+            f"{self.cultivo.codigo} - {self.campania.codigo}: "
+            f"[{self.min_ha} ha - {self.max_ha} ha]"
+        )
 
 
 class RendimientoCultivoSuelo(models.Model):

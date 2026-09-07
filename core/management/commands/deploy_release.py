@@ -7,14 +7,14 @@ from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
-    help = "Aplica migraciones y carga Input v1 en la base desplegada."
+    help = "Aplica migraciones y carga Input v5.1 en la base desplegada."
 
     def handle(self, *args, **options):
         self.stdout.write("Aplicando migraciones...")
         call_command("migrate", interactive=False)
 
         input_path = Path(
-            os.getenv("INPUT_DATA_FILE", "docs/Input v1.xlsx")
+            os.getenv("INPUT_DATA_FILE", "docs/Input v5.1.xlsx")
         )
         if not input_path.is_absolute():
             input_path = Path(settings.BASE_DIR) / input_path

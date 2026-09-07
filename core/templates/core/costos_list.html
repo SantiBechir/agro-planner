@@ -154,9 +154,33 @@
     <div class="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-5 py-4 text-sm text-slate-700">
         <h2 class="font-extrabold text-[#2f5e31]">¿Qué considera cada costo?</h2>
         <div class="mt-2 text-xs leading-relaxed">
-            <p>Semillas, fertilizantes, fitosanitarios y labores de implantación y manejo.</p>
+            <p>El costo total de siembra se calcula automáticamente como semillas + agroquímicos + fertilizantes + labores + estructura.</p>
         </div>
     </div>
+    {% endif %}
+
+    {% if totales_siembra %}
+    <section class="backdrop-blur-md bg-white/95 border border-emerald-500/10 shadow-xl rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-200 bg-emerald-50/60">
+            <h2 class="text-lg font-extrabold tracking-tight text-[#2f5e31]">Costo total de siembra</h2>
+            <p class="mt-1 text-xs font-semibold text-slate-500">Total calculado; no se guarda ni se edita por separado.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200">
+                <thead class="bg-slate-50"><tr>
+                    <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Cultivo</th>
+                    <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Campaña</th>
+                    <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Total</th>
+                    <th class="px-5 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Unidad</th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for total in totales_siembra %}
+                    <tr data-sowing-total="{{ total.grupo }}" data-value-sc_seed="{{ total.sc_seed|unlocalize }}" data-value-sc_agro="{{ total.sc_agro|unlocalize }}" data-value-sc_fert="{{ total.sc_fert|unlocalize }}" data-value-sc_labor="{{ total.sc_labor|unlocalize }}" data-value-sc_structure="{{ total.sc_structure|unlocalize }}"><td class="px-5 py-3 text-sm font-bold text-slate-700">{{ total.cultivo }}</td><td class="px-5 py-3 text-sm text-slate-600">{{ total.campania }}</td><td class="px-5 py-3 text-sm font-extrabold text-[#2f5e31]" data-sowing-total-value>{{ total.total|floatformat:2 }}</td><td class="px-5 py-3 text-xs font-semibold text-slate-500">USD/ha</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
     {% endif %}
 
     {% if request.user.can_edit_agricultural_data %}
@@ -194,7 +218,7 @@
                         <td class="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{{ costo.campania_mostrar }}</td>
                         <td class="px-5 py-3 whitespace-nowrap">
                             {% if request.user.can_edit_agricultural_data %}
-                            <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
+                            <input type="number" step="0.01" min="0" name="costo_{{ costo.id }}" value="{{ costo.valor|unlocalize }}" {% if costo.es_componente_siembra %}data-sowing-component data-sowing-group="{{ costo.grupo_siembra }}" data-sowing-code="{{ costo.tipo_costo.codigo }}"{% endif %} class="w-32 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#4d8b4f] focus:ring-1 focus:ring-[#4d8b4f]">
                             {% else %}
                             <span class="text-sm font-bold text-slate-700">{{ costo.valor|floatformat:2 }}</span>
                             {% endif %}
@@ -269,3 +293,18 @@
     {% if request.user.can_edit_agricultural_data %}</form>{% else %}</div>{% endif %}
     {% endif %}
 </div>
+<script>
+(() => {
+    const root = document.getElementById("main-content") || document;
+    root.querySelectorAll("[data-sowing-component]").forEach((input) => {
+        input.addEventListener("input", () => {
+            const row = root.querySelector(`[data-sowing-total="${input.dataset.sowingGroup}"]`);
+            if (!row) return;
+            row.setAttribute(`data-value-${input.dataset.sowingCode}`, input.value || "0");
+            const codes = ["sc_seed", "sc_agro", "sc_fert", "sc_labor", "sc_structure"];
+            const total = codes.reduce((sum, code) => sum + Number(row.getAttribute(`data-value-${code}`) || 0), 0);
+            row.querySelector("[data-sowing-total-value]").textContent = total.toFixed(2);
+        });
+    });
+})();
+</script>

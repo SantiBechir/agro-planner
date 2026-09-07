@@ -10,6 +10,7 @@ from .models import (
     Cultivo,
     HistorialLoteCultivo,
     ImpactoRotacion,
+    LimiteSuperficieCultivoCampania,
     Lote,
     NivelAntiguedad,
     Planificacion,
@@ -95,6 +96,13 @@ class CostoAdmin(admin.ModelAdmin):
     list_display = ("cultivo", "tipo_costo", "valor", "campania", "lote")
     list_filter = ("tipo_costo", "campania", "lote")
     search_fields = ("cultivo__codigo", "tipo_costo__codigo")
+
+
+@admin.register(LimiteSuperficieCultivoCampania)
+class LimiteSuperficieCultivoCampaniaAdmin(admin.ModelAdmin):
+    list_display = ("cultivo", "campania", "min_ha", "max_ha")
+    list_filter = ("campania", "cultivo")
+    search_fields = ("cultivo__codigo", "campania__codigo")
 
 
 @admin.register(RendimientoCultivoSuelo)

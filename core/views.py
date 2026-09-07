@@ -11,6 +11,7 @@ from django.db.models import Count, Prefetch, Q
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from core.services.economic_indicators import build_economic_indicators
+from core.services.costos import COMPONENTES_SIEMBRA, calcular_costo_siembra
 from accounts.roles import editor_required, has_editor_access
 from core.models import (
     Ambiente,
@@ -39,7 +40,11 @@ BARBECHO_COST_Q = Q(cultivo__codigo__icontains="BARBECHO") | Q(
 
 TRADUCCIONES_TIPO_COSTO = {
     "fsp": "Precio futuro de venta",
-    "sc": "Costo de cultivo",
+    "sc_seed": "Semillas",
+    "sc_agro": "Agroquímicos",
+    "sc_fert": "Fertilizantes",
+    "sc_labor": "Labores",
+    "sc_structure": "Estructura",
     "hc": "Costo de cosecha",
     "frc": "Costo fijo de arrendamiento",
     "vr": "Costo variable de arrendamiento",
@@ -53,10 +58,11 @@ TRADUCCIONES_TIPO_COSTO = {
 
 DETALLES_TIPO_COSTO = {
     "fsp": "Precio esperado de venta del grano por tonelada.",
-    "sc": (
-        "Incluye semillas, fertilizantes, fitosanitarios y labores de implantacion "
-        "y manejo. No incluye el costo de arrendamiento."
-    ),
+    "sc_seed": "Costo de semillas por hectárea.",
+    "sc_agro": "Costo de agroquímicos por hectárea.",
+    "sc_fert": "Costo de fertilizantes por hectárea.",
+    "sc_labor": "Costo de labores por hectárea.",
+    "sc_structure": "Costo de estructura por hectárea.",
     "hc": "Incluye las labores y servicios asociados a la cosecha.",
     "frc": "Cargo fijo de arrendamiento por cultivo, lote y campania.",
     "vr": "Cargo variable de arrendamiento como porcentaje del ingreso por cultivo, lote y campania.",
@@ -79,7 +85,11 @@ def _decorate_costo(costo):
         "",
     )
     if costo.campania:
-        inicio = 2025 + (costo.campania.orden - 1)
+        inicio = (
+            costo.campania.fecha_inicio.year
+            if costo.campania.fecha_inicio
+            else 2025 + (costo.campania.orden - 1)
+        )
         costo.campania_mostrar = f"{inicio}/{inicio + 1}"
     else:
         costo.campania_mostrar = "Global"
@@ -674,7 +684,7 @@ def cultivo_create(request):
                         tipo.codigo: tipo
                         for tipo in TipoCosto.objects.filter(
                             codigo__in=[
-                                "fsp", "sc", "hc", "frc", "vr", "tf",
+                                "fsp", *COMPONENTES_SIEMBRA, "hc", "frc", "vr", "tf",
                                 "scp", "cp", "st", "cst", "clt",
                             ]
                         )
@@ -692,7 +702,7 @@ def cultivo_create(request):
                                 configurado=False,
                             ))
 
-                    for codigo_tipo in ("fsp", "sc", "hc", "cp", "cst", "clt"):
+                    for codigo_tipo in ("fsp", *COMPONENTES_SIEMBRA, "hc", "cp", "cst", "clt"):
                         if codigo_tipo in tipos_costo:
                             costos.extend(
                                 Costo(
@@ -860,7 +870,12 @@ def costo_list(request):
     )
     
     # Mostrar las campañas como años (2025/2026, 2026/2027, ...)
-    anio_inicio_campania_actual = 2025
+    anio_inicio_campania_actual = (
+        Campania.objects.order_by("orden")
+        .values_list("fecha_inicio__year", flat=True)
+        .first()
+        or 2025
+    )
 
     for costo in page_obj.object_list:
         if costo.campania:
@@ -879,8 +894,6 @@ def costo_list(request):
         else:
             costo.campania_mostrar = "Global"
 
-    anio_inicio_campania_actual = 2025
-
     campanias = Campania.objects.order_by("orden")
 
     for campania in campanias:
@@ -888,20 +901,6 @@ def costo_list(request):
         fin = inicio + 1
         campania.nombre_mostrar = f"{inicio}/{fin}"
 
-    TRADUCCIONES_TIPO_COSTO = {
-        "fsp": "Precio futuro de venta",
-        "sc": "Costo de cultivo",
-        "hc": "Costo de cosecha",
-        "frc": "Costo fijo de arrendamiento",
-        "vr": "Costo variable de arrendamiento",
-        "tf": "Comisión de comercialización",
-        "scp": "Producción acondicionada",
-        "cp": "Costo de acondicionamiento",
-        "st": "Proporción de transporte corto / embolsado",
-        "cst": "Costo de flete corta distancia",
-        "clt": "Costo de flete larga distancia",
-    }
-    
     tipos_costo = TipoCosto.objects.order_by("codigo")
 
     for tipo in tipos_costo:
@@ -916,6 +915,15 @@ def costo_list(request):
             costo.tipo_costo.codigo,
             costo.tipo_costo.descripcion,
         )
+        costo.es_componente_siembra = (
+            costo.tipo_costo.codigo in COMPONENTES_SIEMBRA
+            and costo.campania_id is not None
+        )
+        costo.grupo_siembra = (
+            f"{costo.cultivo_id}-{costo.campania_id}"
+            if costo.es_componente_siembra
+            else ""
+        )
 
     for costo in arrendamiento_page_obj.object_list:
         costo.tipo_costo.descripcion_mostrar = TRADUCCIONES_TIPO_COSTO.get(
@@ -923,10 +931,48 @@ def costo_list(request):
             costo.tipo_costo.descripcion,
         )
 
-    show_costo_cultivo_help = any(
-        tipo.codigo == "sc" and str(tipo.id) == selected_tipo
-        for tipo in tipos_costo
-    )
+    show_costo_cultivo_help = tipo_seleccionado_codigo in COMPONENTES_SIEMBRA
+
+    totales_siembra = []
+    if tipo_seleccionado_codigo in (None, *COMPONENTES_SIEMBRA):
+        componentes = (
+            Costo.objects.filter(tipo_costo__codigo__in=COMPONENTES_SIEMBRA)
+            .exclude(BARBECHO_COST_Q)
+            .select_related("cultivo", "tipo_costo", "campania")
+        )
+        if selected_campania:
+            componentes = componentes.filter(campania_id=selected_campania)
+        if selected_cultivo:
+            componentes = componentes.filter(cultivo_id=selected_cultivo)
+        agrupados = {}
+        for costo in componentes:
+            if costo.campania is None:
+                continue
+            key = (costo.cultivo_id, costo.campania_id)
+            grupo = agrupados.setdefault(
+                key,
+                {
+                    "cultivo": costo.cultivo.codigo,
+                    "campania": (
+                        f"{costo.campania.fecha_inicio.year}/{costo.campania.fecha_inicio.year + 1}"
+                        if costo.campania.fecha_inicio
+                        else f"{2024 + costo.campania.orden}/{2025 + costo.campania.orden}"
+                    ),
+                    "valores": {},
+                },
+            )
+            grupo["valores"][costo.tipo_costo.codigo] = costo.valor
+        for key, grupo in agrupados.items():
+            valores = grupo["valores"]
+            grupo["grupo"] = f"{key[0]}-{key[1]}"
+            grupo["sc_seed"] = valores.get("sc_seed", 0)
+            grupo["sc_agro"] = valores.get("sc_agro", 0)
+            grupo["sc_fert"] = valores.get("sc_fert", 0)
+            grupo["sc_labor"] = valores.get("sc_labor", 0)
+            grupo["sc_structure"] = valores.get("sc_structure", 0)
+            grupo["total"] = calcular_costo_siembra(valores)
+            totales_siembra.append(grupo)
+        totales_siembra.sort(key=lambda item: (item["cultivo"], item["campania"]))
     
     indicator_data = build_economic_indicators()
     if selected_campania:
@@ -1220,6 +1266,7 @@ def costo_list(request):
             selected_tab == "margenes" and mb_view == "lista"
         ) or (selected_tab == "indiferencia" and ri_view == "lista"),
         "show_costo_cultivo_help": show_costo_cultivo_help,
+        "totales_siembra": totales_siembra,
         "margenes": margenes,
         "mb_selected_campanias": mb_selected_campanias,
         "mb_selected_suelos": mb_selected_suelos,
