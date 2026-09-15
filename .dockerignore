@@ -1,0 +1,11 @@
+.git
+.venv
+.idea
+.atl
+__pycache__/
+*.pyc
+.env
+.env.*
+db.sqlite3
+staticfiles/
+*.log

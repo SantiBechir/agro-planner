@@ -77,7 +77,8 @@ DATABASES = {
     "default": dj_database_url.parse(
         database_url,
         conn_max_age=600,
-        ssl_require=True,
+        # True en Railway (Postgres expuesto); False en redes Docker internas sin TLS.
+        ssl_require=config("DATABASE_SSL_REQUIRE", default=True, cast=bool),
     )
 }
 
@@ -92,6 +93,7 @@ STORAGES = {
 WHITENOISE_MANIFEST_STRICT = config("WHITENOISE_MANIFEST_STRICT", default=False, cast=bool)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_SSL_REDIRECT = True
+# False sólo para pruebas locales del contenedor sin proxy TLS delante.
+SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

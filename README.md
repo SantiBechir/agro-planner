@@ -26,7 +26,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-El endpoint `GET /` debe devolver `OK`.
+El endpoint `GET /` muestra el dashboard y requiere iniciar sesión.
 
 La autenticación usa el correo electrónico como identificador. Los usuarios se
 crean explícitamente con `createsuperuser` o desde Django Admin; ninguna
@@ -43,8 +43,36 @@ migración crea cuentas ni contiene contraseñas.
 | `RAILWAY_PUBLIC_DOMAIN` | Dominio público que Railway asigna al servicio      | `mi-app.up.railway.app`             |
 | `CSRF_TRUSTED_ORIGINS`  | Orígenes https confiables para CSRF (coma separada) | `https://mi-app.up.railway.app`     |
 | `INPUT_DATA_FILE`       | Ruta del Excel que se carga durante el release      | `docs/Input v5.1.xlsx`                |
+| `DATABASE_SSL_REQUIRE`  | SSL hacia Postgres en producción (default `True`)   | `False` en redes Docker internas      |
+| `SECURE_SSL_REDIRECT`   | Redirect HTTP→HTTPS en producción (default `True`)  | `False` para pruebas locales          |
+| `POSTGRES_DB`           | Base del contenedor Postgres (compose)              | `agroplanner`                         |
+| `POSTGRES_USER`         | Usuario del contenedor Postgres (compose)           | `agro`                                |
+| `POSTGRES_PASSWORD`     | Contraseña del contenedor Postgres (compose)        | obligatoria para compose              |
 
 En desarrollo, si no configurás `DATABASE_URL`, usa SQLite automáticamente.
+
+## Docker (servidor propio)
+
+`docker-compose.yml` levanta cuatro servicios: `db` (Postgres 16 con volumen
+persistente), `migrate` (corre `deploy_release` una vez por arranque: migra e
+importa el input de forma idempotente), `web` (gunicorn en `:8000`) y `worker`
+(`process_optimizations --loop`, equivalente al worker del Procfile).
+
+```bash
+# Completar en .env: SECRET_KEY y POSTGRES_PASSWORD (ver .env.example)
+docker compose up -d --build
+```
+
+La app queda en `http://localhost:8000`. Compose construye `DATABASE_URL`
+desde `POSTGRES_*` y desactiva `DATABASE_SSL_REQUIRE` (red interna sin TLS).
+En el servidor real, detrás de un proxy con TLS, definí `SECURE_SSL_REDIRECT=true`,
+`ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS` con el dominio definitivo.
+
+```bash
+docker compose logs -f worker   # seguir al worker
+docker compose down             # frenar (conserva datos)
+docker compose down -v          # frenar y borrar el volumen de Postgres
+```
 
 ## Deploy en Railway
 
@@ -99,12 +127,24 @@ python manage.py cargar_input "docs/Input v5.1.xlsx" --validar
 │   ├── urls.py
 │   ├── wsgi.py
 │   └── asgi.py
+├── accounts/                # Usuarios, roles, autenticación y tests
 ├── core/
-│   ├── views.py             # Health check en /
+│   ├── models.py            # Modelos agrícolas y económicos
+│   ├── views/               # Vistas por responsabilidad
+│   ├── services/            # Operaciones, consultas, importador y solver
+│   ├── presentation/        # Tablas y gráficos económicos
+│   ├── tests/               # Tests por comportamiento
 │   └── urls.py
 ├── manage.py
 ├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
 ├── Procfile
 ├── runtime.txt
 └── .env.example
 ```
+
+La [refactorización interna y propuesta de subapps](docs/refactorizacion-subapps.md)
+describe los límites actuales y las etapas futuras. Los servicios de escritura
+reciben el usuario y datos explícitos, para poder reutilizarlos desde otras
+interfaces. Los modelos y las tablas siguen perteneciendo a `core`.
