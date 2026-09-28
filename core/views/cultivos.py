@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -10,6 +11,8 @@ from django.views.decorators.http import require_POST
 from accounts.roles import editor_required
 from core.models import Cultivo, TipoSuelo
 from core.services.cultivos import crear_cultivo
+
+logger = logging.getLogger(__name__)
 
 
 @login_required(login_url="login")
@@ -92,8 +95,9 @@ def cultivo_create(request):
     except ValidationError as exc:
         messages.error(request, exc.messages[0])
         return cultivo_list(request, form_data=form_data, open_modal=True)
-    except Exception as exc:
-        messages.error(request, f"Error al crear cultivo: {exc}")
+    except Exception:
+        logger.exception("Error interno al crear un cultivo")
+        messages.error(request, "No se pudo crear el cultivo. Intentá nuevamente o contactá al administrador.")
         return cultivo_list(request, form_data=form_data, open_modal=True)
     messages.success(request, f"Cultivo {cultivo.codigo} creado. Completa sus precios y costos antes de habilitarlo.")
     return cultivo_list(request)

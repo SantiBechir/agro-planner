@@ -1,6 +1,7 @@
 import pyomo.environ as pyo
 import pyomo.contrib.appsi.solvers.highs  # registers the appsi_highs solver
 from decouple import config
+from django.conf import settings
 from django.db import transaction
 from core.models import Planificacion, AsignacionLoteSlot, Lote, Cultivo, SlotSiembra
 from core.services.optimization_inputs import build_pyomo_input_data
@@ -293,13 +294,11 @@ def run_optimization(planificacion_id):
         # ---- SOLVER ----
         opt = pyo.SolverFactory('highs')
         opt.options['mip_rel_gap'] = 0.05
-        opt.options['threads'] = 0
+        opt.options['threads'] = settings.SOLVER_THREADS
         opt.options['presolve'] = 'on'
         opt.options['parallel'] = 'on'
 
-        time_limit_raw = config('SOLVER_TIME_LIMIT', default='')
-        if time_limit_raw:
-            opt.options['time_limit'] = float(time_limit_raw)
+        opt.options['time_limit'] = settings.SOLVER_TIME_LIMIT
         mip_gap_raw = config('SOLVER_MIP_GAP', default='')
         if mip_gap_raw:
             opt.options['mip_rel_gap'] = float(mip_gap_raw)

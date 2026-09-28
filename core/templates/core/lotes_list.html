@@ -129,7 +129,7 @@
         x-data="{
           numAmbientes: {{ lote.ambientes.count }},
           sueloSel: [{% for ambiente in lote.ambientes.all %}'{{ ambiente.tipo_suelo_id }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
-          rendimientoSel: [{% for ambiente in lote.ambientes.all %}'{{ ambiente.rendimiento_esperado }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+          rendimientoSel: [{% for ambiente in lote.ambientes.all %}'{{ ambiente.rendimiento_esperado|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
           haSel: [{% for ambiente in lote.ambientes.all %}'{{ ambiente.superficie_ha }}'{% if not forloop.last %}, {% endif %}{% endfor %}]
         }"
       >

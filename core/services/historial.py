@@ -1,6 +1,7 @@
 """Carga y eliminación del historial productivo de un lote."""
 
 from django.core.exceptions import ValidationError
+from math import isfinite
 from django.db import transaction
 
 from core.models import CampaniaHistorica, Cultivo, HistorialLoteCultivo, Lote
@@ -12,9 +13,11 @@ def _parse_rendimiento(raw):
         return None
     try:
         valor = float(raw)
-        return valor if valor >= 0 else None
-    except ValueError:
-        return None
+        if not isfinite(valor) or valor < 0:
+            raise ValueError
+        return valor
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("El rendimiento debe ser un número válido mayor o igual a cero.") from exc
 
 
 def cargar_historial(actor, lote_id, *, anio_inicio, cultivo_1_id,
@@ -34,8 +37,11 @@ def cargar_historial(actor, lote_id, *, anio_inicio, cultivo_1_id,
             f"(desde {base_year - 15}/{base_year - 14})."
         )
 
-    cultivo_1 = Cultivo.objects.filter(pk=cultivo_1_id).first()
-    cultivo_2 = Cultivo.objects.filter(pk=cultivo_2_id).first() if cultivo_2_id else None
+    try:
+        cultivo_1 = Cultivo.objects.filter(pk=int(cultivo_1_id)).first()
+        cultivo_2 = Cultivo.objects.filter(pk=int(cultivo_2_id)).first() if cultivo_2_id else None
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValidationError("Seleccione cultivos válidos.") from exc
     if cultivo_1 is None:
         raise ValidationError("Debe indicar la campaña y el cultivo principal.")
     if cultivo_2_id and cultivo_2 is None:

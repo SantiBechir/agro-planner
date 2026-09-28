@@ -300,8 +300,10 @@ Control - AgroPlanner{% endblock %} {% block content %}
               </p>
             </div>
           </div>
-          <a
-            href="{% url 'logout' %}"
+          <form action="{% url 'logout' %}" method="post">
+          {% csrf_token %}
+          <button
+            type="submit"
             class="p-1.5 hover:bg-white/10 text-emerald-200 hover:text-white rounded-xl transition duration-150 ml-2"
             title="Cerrar Sesión"
           >
@@ -318,7 +320,8 @@ Control - AgroPlanner{% endblock %} {% block content %}
                 d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
               />
             </svg>
-          </a>
+          </button>
+          </form>
         </div>
       </div>
     </div>

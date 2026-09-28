@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -55,7 +57,11 @@ def planificacion_list(request):
 def ejecutar_optimizacion(request):
     nombre = request.POST.get("nombre", f"Planificación {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-    planificacion = solicitar_planificacion(request.user, nombre=nombre)
+    try:
+        planificacion = solicitar_planificacion(request.user, nombre=nombre)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+        return redirect("planificacion_list")
 
     return redirect("planificacion_status", pk=planificacion.id)
 

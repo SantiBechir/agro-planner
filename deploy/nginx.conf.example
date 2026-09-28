@@ -1,0 +1,46 @@
+# Install within Nginx's http context. Replace domain and certificate paths.
+# Assumes Nginx runs on the SAME host as Docker Compose.
+map $request_method $agro_login_key {
+    default "";
+    POST $binary_remote_addr;
+}
+limit_req_zone $agro_login_key zone=agro_login:10m rate=30r/m;
+
+server {
+    listen 80;
+    server_name agro.example.edu.ar;
+    return 301 https://agro.example.edu.ar$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name agro.example.edu.ar;
+    ssl_certificate /etc/ssl/agro/fullchain.pem;
+    ssl_certificate_key /etc/ssl/agro/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+    client_max_body_size 1m;
+
+    # Reject other Host headers even if this is the default virtual host.
+    if ($host != agro.example.edu.ar) { return 444; }
+
+    # Always overwrite forwarding headers; never pass client-supplied values.
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header Connection "";
+    proxy_http_version 1.1;
+    proxy_read_timeout 60s;
+    proxy_cache off;
+
+    location ~ ^/(login/|admin/login/)$ {
+        limit_req zone=agro_login burst=20 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8000;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+    }
+}

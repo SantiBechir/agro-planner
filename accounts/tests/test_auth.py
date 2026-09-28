@@ -51,7 +51,7 @@ class EmailLoginTest(TestCase):
     def test_logout_ends_the_session(self):
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("logout"))
+        response = self.client.post(reverse("logout"))
 
         self.assertRedirects(response, reverse("login"))
         self.assertNotIn("_auth_user_id", self.client.session)

@@ -10,6 +10,8 @@ class Command(BaseCommand):
     help = "Aplica migraciones y carga Input v5.1 en la base desplegada."
 
     def handle(self, *args, **options):
+        self.stdout.write("Verificando coherencia de modelos y migraciones...")
+        call_command("makemigrations", check=True, dry_run=True, interactive=False)
         self.stdout.write("Aplicando migraciones...")
         call_command("migrate", interactive=False)
 

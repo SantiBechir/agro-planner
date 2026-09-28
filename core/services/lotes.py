@@ -1,6 +1,7 @@
 """Operaciones de lotes y ambientes, independientes de la interfaz HTTP."""
 
 import re
+from math import isfinite
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -36,7 +37,7 @@ def validar_ambientes(ambientes):
             raise ValidationError("El rendimiento esperado debe ser Alto, Medio o Bajo.")
         try:
             ha = float(ha_raw)
-            if ha <= 0:
+            if not isfinite(ha) or ha <= 0:
                 raise ValueError
         except (TypeError, ValueError) as exc:
             raise ValidationError("La superficie de cada ambiente debe ser un número mayor a cero.") from exc
@@ -48,12 +49,17 @@ def _validar_lote(nombre, ambientes, *, lote_id=None):
     # El nombre conserva prioridad sobre los errores de ambientes en el formulario.
     if not nombre:
         raise ValidationError("El nombre del lote es obligatorio.")
+    if len(nombre) > 100:
+        raise ValidationError("El nombre del lote debe tener hasta 100 caracteres.")
     existentes = Lote.objects.filter(nombre__iexact=nombre)
     if lote_id is not None:
         existentes = existentes.exclude(pk=lote_id)
     if existentes.exists():
         raise ValidationError(f'Ya existe un lote con el nombre "{nombre}".')
-    return validar_ambientes(ambientes)
+    data = validar_ambientes(ambientes)
+    if not isfinite(sum(ha for _, _, ha in data)):
+        raise ValidationError("La superficie total del lote está fuera de rango.")
+    return data
 
 
 def _guardar_ambientes(lote, ambientes):

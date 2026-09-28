@@ -1,6 +1,7 @@
 """Cálculos, consultas y edición de precios y costos."""
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Dict, Tuple, Any
 
 from django.core.exceptions import ValidationError
@@ -74,7 +75,7 @@ def actualizar_costos(actor, valores, *, cultivo_id=None, habilitar=False):
     for costo_id, raw_value in valores.items():
         try:
             value = float(raw_value)
-            if value < 0:
+            if not isfinite(value) or value < 0:
                 raise ValueError("negative")
             updates.append((int(costo_id), value))
         except (TypeError, ValueError) as exc:

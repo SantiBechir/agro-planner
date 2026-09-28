@@ -69,6 +69,7 @@ def set_functional_role(user, role_name):
 def has_editor_access(user):
     return bool(
         user.is_authenticated
+        and user.is_active
         and (user.is_superuser or user.groups.filter(name=EDITOR_ROLE).exists())
     )
 

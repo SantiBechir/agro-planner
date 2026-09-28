@@ -11,5 +11,5 @@ def require_editor(actor):
 
 
 def require_authenticated(actor):
-    if not actor.is_authenticated:
+    if not actor.is_authenticated or not actor.is_active:
         raise PermissionDenied

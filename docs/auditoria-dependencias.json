@@ -1,0 +1,122 @@
+{
+  "date": "2026-09-28",
+  "scanner": "pip-audit 2.10.1 (PyPI vulnerability service)",
+  "before": [
+    {
+      "name": "pip",
+      "version": "26.0.1",
+      "advisories": [
+        "PYSEC-2026-196",
+        "PYSEC-2026-2875",
+        "PYSEC-2026-2876",
+        "PYSEC-2026-3721"
+      ],
+      "fixed_versions": [
+        "26.1",
+        "26.1.2",
+        "26.2",
+        "26.2.0"
+      ]
+    },
+    {
+      "name": "sqlparse",
+      "version": "0.5.5",
+      "advisories": [
+        "PYSEC-2026-3696",
+        "PYSEC-2026-3697",
+        "PYSEC-2026-3698",
+        "PYSEC-2026-3699",
+        "PYSEC-2026-3923"
+      ],
+      "fixed_versions": [
+        "0.6.0"
+      ]
+    }
+  ],
+  "local_after": {
+    "packages": 21,
+    "vulnerabilities": 0
+  },
+  "container_after": {
+    "packages": 19,
+    "vulnerabilities": 0,
+    "dependencies": [
+      {
+        "name": "asgiref",
+        "version": "3.12.1"
+      },
+      {
+        "name": "dj-database-url",
+        "version": "2.1.0"
+      },
+      {
+        "name": "django",
+        "version": "5.2.17"
+      },
+      {
+        "name": "django-axes",
+        "version": "8.3.1"
+      },
+      {
+        "name": "et-xmlfile",
+        "version": "2.0.0"
+      },
+      {
+        "name": "gunicorn",
+        "version": "26.2.0"
+      },
+      {
+        "name": "highspy",
+        "version": "1.15.1"
+      },
+      {
+        "name": "numpy",
+        "version": "2.5.3"
+      },
+      {
+        "name": "openpyxl",
+        "version": "3.1.5"
+      },
+      {
+        "name": "pandas",
+        "version": "3.0.3"
+      },
+      {
+        "name": "pip",
+        "version": "26.2.1"
+      },
+      {
+        "name": "psycopg2-binary",
+        "version": "2.9.10"
+      },
+      {
+        "name": "pyomo",
+        "version": "6.10.0"
+      },
+      {
+        "name": "python-dateutil",
+        "version": "2.9.0.post0"
+      },
+      {
+        "name": "python-decouple",
+        "version": "3.8"
+      },
+      {
+        "name": "six",
+        "version": "1.17.0"
+      },
+      {
+        "name": "sqlparse",
+        "version": "0.6.0"
+      },
+      {
+        "name": "typing-extensions",
+        "version": "4.16.0"
+      },
+      {
+        "name": "whitenoise",
+        "version": "6.12.0"
+      }
+    ]
+  }
+}

@@ -1,11 +1,15 @@
 .git
 .venv
+venv
+node_modules
 .idea
 .atl
 __pycache__/
 *.pyc
 .env
 .env.*
+config/settings/local.py
+config/settings/test.py
 db.sqlite3
 staticfiles/
 *.log

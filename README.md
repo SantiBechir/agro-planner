@@ -28,6 +28,10 @@ python manage.py runserver
 
 El endpoint `GET /` muestra el dashboard y requiere iniciar sesión.
 
+La [inspección de seguridad](docs/auditoria-seguridad.md) y la
+[guía de despliegue con HTTPS](docs/despliegue-seguro.md) describen las protecciones,
+los límites de la revisión y la configuración requerida antes de publicar.
+
 La autenticación usa el correo electrónico como identificador. Los usuarios se
 crean explícitamente con `createsuperuser` o desde Django Admin; ninguna
 migración crea cuentas ni contiene contraseñas.
@@ -41,10 +45,15 @@ migración crea cuentas ni contiene contraseñas.
 | `DEBUG`                 | Modo debug                                          | `True` / `False`                    |
 | `ALLOWED_HOSTS`         | Hosts permitidos (separados por coma)               | `localhost,mi-app.up.railway.app`   |
 | `RAILWAY_PUBLIC_DOMAIN` | Dominio público que Railway asigna al servicio      | `mi-app.up.railway.app`             |
-| `CSRF_TRUSTED_ORIGINS`  | Orígenes https confiables para CSRF (coma separada) | `https://mi-app.up.railway.app`     |
+| `CSRF_TRUSTED_ORIGINS`  | Orígenes HTTPS confiables para CSRF (coma separada) | `https://mi-app.up.railway.app`     |
 | `INPUT_DATA_FILE`       | Ruta del Excel que se carga durante el release      | `docs/Input v5.1.xlsx`                |
 | `DATABASE_SSL_REQUIRE`  | SSL hacia Postgres en producción (default `True`)   | `False` en redes Docker internas      |
-| `SECURE_SSL_REDIRECT`   | Redirect HTTP→HTTPS en producción (default `True`)  | `False` para pruebas locales          |
+| `SECURE_SSL_REDIRECT`   | Redirect HTTP→HTTPS en producción (default `True`)  | `True`                               |
+| `TRUST_PROXY_CLIENT_IP` | Leer X-Real-IP, solo con proxy que reemplace el header y backend privado | `True` con proxy configurado |
+| `WEB_PORT`             | Puerto del host, publicado solo en 127.0.0.1       | `8000`                               |
+| `SOLVER_TIME_LIMIT`    | Límite de resolución en segundos                   | `300`                                |
+| `SOLVER_THREADS`       | Hilos del solver                                   | `2`                                  |
+| `MAX_ACTIVE_PLANIFICATIONS` | Máximo global de trabajos pendientes/en ejecución | `5`                            |
 | `POSTGRES_DB`           | Base del contenedor Postgres (compose)              | `agroplanner`                         |
 | `POSTGRES_USER`         | Usuario del contenedor Postgres (compose)           | `agro`                                |
 | `POSTGRES_PASSWORD`     | Contraseña del contenedor Postgres (compose)        | obligatoria para compose              |
@@ -59,14 +68,17 @@ importa el input de forma idempotente), `web` (gunicorn en `:8000`) y `worker`
 (`process_optimizations --loop`, equivalente al worker del Procfile).
 
 ```bash
-# Completar en .env: SECRET_KEY y POSTGRES_PASSWORD (ver .env.example)
+# Completar .env según docs/despliegue-seguro.md: clave fuerte, contraseña y dominio HTTPS.
 docker compose up -d --build
 ```
 
-La app queda en `http://localhost:8000`. Compose construye `DATABASE_URL`
-desde `POSTGRES_*` y desactiva `DATABASE_SSL_REQUIRE` (red interna sin TLS).
-En el servidor real, detrás de un proxy con TLS, definí `SECURE_SSL_REDIRECT=true`,
-`ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS` con el dominio definitivo.
+El backend queda en `127.0.0.1:8000` por HTTP para el proxy del servidor.
+Los usuarios acceden por el dominio **HTTPS**; no publicar el 8000 a Internet.
+Compose construye `DATABASE_URL` desde `POSTGRES_*` y desactiva
+`DATABASE_SSL_REQUIRE` únicamente para la red Docker interna. El arranque web
+ejecuta `check --deploy` y se detiene si encuentra advertencias.
+Ver [la guía de despliegue seguro](docs/despliegue-seguro.md), con variables,
+headers del proxy y pruebas de aceptación.
 
 ```bash
 docker compose logs -f worker   # seguir al worker
