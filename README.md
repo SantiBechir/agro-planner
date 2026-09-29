@@ -40,7 +40,7 @@ migración crea cuentas ni contiene contraseñas.
 
 | Variable                | Descripción                                         | Ejemplo                             |
 | ----------------------- | --------------------------------------------------- | ----------------------------------- |
-| `SECRET_KEY`            | Clave secreta de Django                             | `django-insecure-...`               |
+| `SECRET_KEY`            | Clave aleatoria exclusiva, al menos 50 caracteres  | Generar con `secrets.token_urlsafe(48)` |
 | `DATABASE_URL`          | URL de conexión a PostgreSQL                        | `postgres://user:pass@host:5432/db` |
 | `DEBUG`                 | Modo debug                                          | `True` / `False`                    |
 | `ALLOWED_HOSTS`         | Hosts permitidos (separados por coma)               | `localhost,mi-app.up.railway.app`   |
@@ -85,6 +85,22 @@ docker compose logs -f worker   # seguir al worker
 docker compose down             # frenar (conserva datos)
 docker compose down -v          # frenar y borrar el volumen de Postgres
 ```
+
+### Docker para pruebas locales por HTTP
+
+Generar una clave segura y copiarla a `SECRET_KEY` en `.env` (no subirla a Git):
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+Abrir `http://localhost:8000`. Este archivo adicional habilita las cookies por
+HTTP únicamente para pruebas locales y conserva el puerto en `127.0.0.1`.
+Mantener ambos `-f` al ejecutar `logs`, `exec`, `up` o `down` en este modo.
+No usar `docker-compose.local.yml` en la facultad: el comando de producción
+es `docker compose up -d --build`, con el `.env` y el proxy HTTPS del servidor.
+Ambos modos usan el mismo volumen de Postgres; cambiar de modo conserva los datos.
 
 ## Deploy en Railway
 

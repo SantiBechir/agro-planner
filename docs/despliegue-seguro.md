@@ -4,6 +4,13 @@ Los usuarios deben acceder por `https://DOMINIO`. El puerto 8000 es HTTP interno
 entre el proxy y Django. Nunca abrirlo a Internet ni desactivar las cookies
 seguras para permitir un login público por HTTP.
 
+Para probar en la computadora por `http://localhost:8000`, usar exclusivamente
+`docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`.
+Este modo local usa otros settings y mantiene el puerto en loopback. No incluir
+el archivo local en el despliegue de la facultad. `SECURE_SSL_REDIRECT=false`
+no habilita las pruebas HTTP con el Compose de producción: sus comprobaciones
+de seguridad impedirán el arranque.
+
 ## Configuración del servidor
 
 Este Compose publica `127.0.0.1:8000` y supone que el proxy está en el mismo host.

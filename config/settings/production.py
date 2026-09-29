@@ -101,7 +101,7 @@ STORAGES = {
 WHITENOISE_MANIFEST_STRICT = config("WHITENOISE_MANIFEST_STRICT", default=False, cast=bool)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-# False sólo para pruebas locales del contenedor sin proxy TLS delante.
+# El arranque de producción exige True. Para HTTP local usar docker_local.
 SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
