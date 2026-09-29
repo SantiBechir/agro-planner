@@ -3,8 +3,12 @@ from decouple import config
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from urllib.parse import urlparse
+from math import isfinite
 
 DEBUG = False
+
+if len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5 or SECRET_KEY.startswith("django-insecure-"):
+    raise ImproperlyConfigured("SECRET_KEY must be a strong, unique production key (at least 50 characters).")
 
 
 def _normalize_host(value: str) -> str:
@@ -50,8 +54,10 @@ if normalized_railway_domain and normalized_railway_domain not in ALLOWED_HOSTS:
 
 if not ALLOWED_HOSTS:
     raise ImproperlyConfigured(
-        "Missing ALLOWED_HOSTS environment variable. Set ALLOWED_HOSTS or provide RAILWAY_PUBLIC_DOMAIN."
+        "Missing ALLOWED_HOSTS environment variable. Set it to the server's public domain."
     )
+if "*" in ALLOWED_HOSTS:
+    raise ImproperlyConfigured("Wildcard ALLOWED_HOSTS is not permitted in production.")
 
 raw_csrf_trusted_origins = config("CSRF_TRUSTED_ORIGINS", default="")
 CSRF_TRUSTED_ORIGINS = [
@@ -66,25 +72,58 @@ if normalized_railway_domain:
     railway_origin = _normalize_origin(normalized_railway_domain)
     if railway_origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(railway_origin)
+if any(not origin.startswith("https://") or "*" in origin for origin in CSRF_TRUSTED_ORIGINS):
+    raise ImproperlyConfigured("Production CSRF_TRUSTED_ORIGINS must use explicit HTTPS origins.")
 
 database_url = config("DATABASE_URL", default="")
 if not database_url:
     raise ImproperlyConfigured(
-        "Missing DATABASE_URL environment variable. Attach a PostgreSQL service in Railway."
+        "Missing DATABASE_URL environment variable. Configure a PostgreSQL connection."
     )
 
 DATABASES = {
     "default": dj_database_url.parse(
         database_url,
         conn_max_age=600,
-        ssl_require=True,
+        # True para Postgres externo; False en la red Docker privada sin TLS.
+        ssl_require=config("DATABASE_SSL_REQUIRE", default=True, cast=bool),
     )
 }
 
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 WHITENOISE_MANIFEST_STRICT = config("WHITENOISE_MANIFEST_STRICT", default=False, cast=bool)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_SSL_REDIRECT = True
+# El arranque de producción exige True. Para HTTP local usar docker_local.
+SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+SECURE_HSTS_SECONDS = 86400
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
+# The university controls any subdomains and preload registration separately.
+# Keep all other deployment warnings fatal at web startup.
+SILENCED_SYSTEM_CHECKS = ["security.W005", "security.W021"]
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+
+# Alpine and current inline handlers still require these two script allowances.
+# Third-party scripts are self-hosted; external fonts are the only allowed CDN.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
+    "connect-src 'self'; object-src 'none'; base-uri 'self'; "
+    "frame-ancestors 'none'; form-action 'self'"
+)
+
+if not isfinite(SOLVER_TIME_LIMIT) or SOLVER_TIME_LIMIT <= 0 or SOLVER_THREADS < 1 or MAX_ACTIVE_PLANIFICATIONS < 1:
+    raise ImproperlyConfigured("Solver limits and MAX_ACTIVE_PLANIFICATIONS must be positive and finite.")

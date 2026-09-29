@@ -6,6 +6,7 @@ from core.models import (
     Cultivo,
     HistorialLoteCultivo,
     ImpactoRotacion,
+    LimiteSuperficieCultivoCampania,
     Lote,
     NivelAntiguedad,
     RendimientoCultivoSuelo,
@@ -18,7 +19,8 @@ from core.models import (
 
 def build_pyomo_input_data():
     # ── Conjuntos (Sets) ──────────────────────────────────────────────
-    j = list(Lote.objects.values_list("codigo", flat=True))
+    lotes_habilitados = Lote.objects.filter(habilitado=True)
+    j = list(lotes_habilitados.values_list("codigo", flat=True))
 
     cultivos = Cultivo.objects.filter(habilitado_optimizacion=True)
     i = list(cultivos.values_list("codigo", flat=True).order_by("pk"))
@@ -54,16 +56,18 @@ def build_pyomo_input_data():
 
     t = list(SlotSiembra.objects.values_list("codigo", flat=True).order_by("orden"))
 
-    ch = list(
-        CampaniaHistorica.objects.values_list("codigo", flat=True).order_by("orden")
-    )
+    # Model window: the solver consumes exactly the 3 most recent historical
+    # campaigns. Stored campaigns are year-based and mapped behind the scenes
+    # to the internal CH1/CH2/CH3 codes the solver expects.
+    ch = ["CH1", "CH2", "CH3"]
+    base_year = CampaniaHistorica.anio_base_actual()
 
     l = list(
         NivelAntiguedad.objects.values_list("codigo", flat=True).order_by("orden")
     )
 
     # ── Parámetros de lotes ───────────────────────────────────────────
-    lotes = Lote.objects.all()
+    lotes = lotes_habilitados
     ha = {lote.codigo: lote.superficie_ha for lote in lotes}
     max_m = {lote.codigo: lote.max_cultivos_principales for lote in lotes}
     max_s = {lote.codigo: lote.max_cultivos_secundarios for lote in lotes}
@@ -76,7 +80,22 @@ def build_pyomo_input_data():
 
     # ── Costos ────────────────────────────────────────────────────────
     fsp_dict = _build_costo_dict("fsp", requires_campania=True, requires_lote=False)
-    sc_dict = _build_costo_dict("sc", requires_campania=True, requires_lote=False)
+
+    from core.services.costos import COMPONENTES_SIEMBRA
+
+    component_dicts = [
+        _build_costo_dict(code, requires_campania=True, requires_lote=False)
+        for code in COMPONENTES_SIEMBRA
+    ]
+    sc_dict = {
+        (cultivo, campania): sum(
+            values.get((cultivo, campania), 0.0)
+            for values in component_dicts
+        )
+        for cultivo in i
+        for campania in c
+    }
+
     hc_dict = _build_costo_dict("hc", requires_campania=True, requires_lote=False)
     frc_dict = _build_costo_dict(
         "frc", requires_campania=True, requires_lote=True
@@ -121,15 +140,23 @@ def build_pyomo_input_data():
         )
 
     # ── Historial ─────────────────────────────────────────────────────
+    # Each stored year maps to CH1 (base_year - 1), CH2 (base_year - 2) or
+    # CH3 (base_year - 3). Older campaigns stay stored for display and future
+    # model extensions but are excluded from the solver input.
     xh_dict = {}
-    for obj in HistorialLoteCultivo.objects.select_related(
+    for obj in HistorialLoteCultivo.objects.filter(
+        lote__habilitado=True
+    ).select_related(
         "cultivo", "lote", "campania_historica"
     ):
-        xh_dict[
-            (obj.cultivo.codigo, obj.lote.codigo, obj.campania_historica.codigo)
-        ] = (1 if obj.presente else 0)
+        lag = (base_year - 1) - obj.campania_historica.anio_inicio
+        if 0 <= lag <= 2:
+            xh_dict[
+                (obj.cultivo.codigo, obj.lote.codigo, f"CH{lag + 1}")
+            ] = (1 if obj.presente else 0)
 
     # ── Niveles de antigüedad (alfa) ──────────────────────────────────
+    lag_dict = {obj.codigo: obj.lag for obj in NivelAntiguedad.objects.all()}
     alfa_dict = {
         obj.codigo: obj.alfa
         for obj in NivelAntiguedad.objects.all()
@@ -162,7 +189,32 @@ def build_pyomo_input_data():
         for camp in Campania.objects.all().order_by("orden")
     }
 
+    maxha_dict = {}
+    minha_dict = {}
+    for limit in LimiteSuperficieCultivoCampania.objects.select_related(
+        "cultivo", "campania"
+    ):
+        key = (limit.cultivo.codigo, limit.campania.codigo)
+        maxha_dict[key] = limit.max_ha
+        minha_dict[key] = limit.min_ha
+
+    # Proporción y productividad por ambiente; lotes sin ambientes usan su suelo.
+    ep_dict, py_dict = {}, {}
+    for lote in lotes_habilitados.prefetch_related('ambientes__tipo_suelo'):
+        ambientes = list(lote.ambientes.all())
+        if ambientes:
+            for ambiente in ambientes:
+                key = (lote.codigo, ambiente.tipo_suelo.codigo)
+                ep_dict[key] = ambiente.superficie_ha / lote.superficie_ha
+                py_dict[key] = {'A': 1.2, 'M': 1.0, 'B': 0.8}[ambiente.rendimiento_esperado]
+        else:
+            key = (lote.codigo, lote.tipo_suelo.codigo)
+            ep_dict[key], py_dict[key] = 1.0, 1.0
+
     return {
+        "ep_dict": ep_dict,
+        "py_dict": py_dict,
+        "lag_dict": lag_dict,
         "j": j,
         "i": i,
         "i_ns": i_ns,
@@ -200,6 +252,8 @@ def build_pyomo_input_data():
         "red_dict": red_dict,
         "tc_dict": tc_dict,
         "ord_dict": ord_dict,
+        "maxha_dict": maxha_dict,
+        "minha_dict": minha_dict,
     }
 
 

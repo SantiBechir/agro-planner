@@ -69,7 +69,7 @@ Control - AgroPlanner{% endblock %} {% block content %}
       </div>
       <!-- Navigation móvil -->
       <div class="mt-8 h-0 flex-1 overflow-y-auto">
-        <nav class="space-y-1.5 px-2">
+        <nav class="space-y-1.5 px-2" data-testid="mobile-navigation">
           <a
             href="{% url 'home' %}"
             @click="activeTab = 'dashboard'; sidebarOpen = false"
@@ -77,6 +77,46 @@ Control - AgroPlanner{% endblock %} {% block content %}
             :class="activeTab === 'dashboard' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
           >
             Dashboard
+          </a>
+          <a
+            href="{% url 'lote_list' %}"
+            hx-get="{% url 'lote_list' %}"
+            hx-target="#main-content"
+            @click="activeTab = 'lotes'; sidebarOpen = false"
+            class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150"
+            :class="activeTab === 'lotes' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
+          >
+            Lotes
+          </a>
+          <a
+            href="{% url 'cultivo_list' %}"
+            hx-get="{% url 'cultivo_list' %}"
+            hx-target="#main-content"
+            @click="activeTab = 'cultivos'; sidebarOpen = false"
+            class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150"
+            :class="activeTab === 'cultivos' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
+          >
+            Cultivos
+          </a>
+          <a
+            href="{% url 'costo_list' %}"
+            hx-get="{% url 'costo_list' %}"
+            hx-target="#main-content"
+            @click="activeTab = 'costos'; sidebarOpen = false"
+            class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150"
+            :class="activeTab === 'costos' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
+          >
+            Precios y Costos
+          </a>
+          <a
+            href="{% url 'planificacion_list' %}"
+            hx-get="{% url 'planificacion_list' %}"
+            hx-target="#main-content"
+            @click="activeTab = 'planificaciones'; sidebarOpen = false"
+            class="group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition duration-150"
+            :class="activeTab === 'planificaciones' ? 'bg-white/10 text-white' : 'text-emerald-100 hover:bg-white/5 hover:text-white'"
+          >
+            Planificaciones
           </a>
         </nav>
       </div>
@@ -249,19 +289,21 @@ Control - AgroPlanner{% endblock %} {% block content %}
             <div
               class="inline-block h-9 w-9 rounded-xl bg-white/15 border border-white/10 flex items-center justify-center text-white font-bold"
             >
-              {{ request.user.username|make_list|first|upper }}
+              {{ request.user.display_name|make_list|first|upper }}
             </div>
             <div class="ml-3 truncate">
               <p class="text-sm font-bold text-white truncate">
-                {{ request.user.username }}
+                {{ request.user.display_name }}
               </p>
               <p class="text-[10px] text-emerald-200 tracking-wider">
-                ADMINISTRADOR
+                {{ request.user.functional_role|upper }}
               </p>
             </div>
           </div>
-          <a
-            href="{% url 'logout' %}"
+          <form action="{% url 'logout' %}" method="post">
+          {% csrf_token %}
+          <button
+            type="submit"
             class="p-1.5 hover:bg-white/10 text-emerald-200 hover:text-white rounded-xl transition duration-150 ml-2"
             title="Cerrar Sesión"
           >
@@ -278,7 +320,8 @@ Control - AgroPlanner{% endblock %} {% block content %}
                 d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
               />
             </svg>
-          </a>
+          </button>
+          </form>
         </div>
       </div>
     </div>
@@ -317,7 +360,7 @@ Control - AgroPlanner{% endblock %} {% block content %}
         <div
           class="inline-block h-8 w-8 rounded-xl bg-white/15 flex items-center justify-center text-white font-bold text-sm"
         >
-          {{ request.user.username|make_list|first|upper }}
+          {{ request.user.display_name|make_list|first|upper }}
         </div>
       </div>
     </div>
@@ -333,7 +376,7 @@ Control - AgroPlanner{% endblock %} {% block content %}
             class="bg-white/80 backdrop-blur-md border border-emerald-500/10 shadow-sm px-6 py-4 rounded-2xl w-fit"
           >
             <h1 class="text-3xl font-extrabold tracking-tight text-[#2f5e31]">
-              Bienvenido, {{ request.user.username }}
+              Bienvenido, {{ request.user.display_name }}
             </h1>
           </div>
         </div>

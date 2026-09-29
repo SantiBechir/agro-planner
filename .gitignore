@@ -39,6 +39,7 @@ staticfiles/
 .env.*.local
 
 # IDEs
+node_modules/
 .idea/
 .vscode/
 *.swp

@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    Ambiente,
     AsignacionLoteSlot,
     Campania,
     CampaniaHistorica,
@@ -9,6 +10,7 @@ from .models import (
     Cultivo,
     HistorialLoteCultivo,
     ImpactoRotacion,
+    LimiteSuperficieCultivoCampania,
     Lote,
     NivelAntiguedad,
     Planificacion,
@@ -62,6 +64,11 @@ class CultivoAdmin(admin.ModelAdmin):
     search_fields = ("codigo", "nombre")
 
 
+class AmbienteInline(admin.TabularInline):
+    model = Ambiente
+    extra = 0
+
+
 @admin.register(Lote)
 class LoteAdmin(admin.ModelAdmin):
     list_display = (
@@ -71,9 +78,11 @@ class LoteAdmin(admin.ModelAdmin):
         "max_cultivos_principales",
         "max_cultivos_secundarios",
         "tipo_suelo",
+        "habilitado",
     )
-    list_filter = ("tipo_suelo",)
+    list_filter = ("tipo_suelo", "habilitado")
     search_fields = ("codigo", "nombre")
+    inlines = [AmbienteInline]
 
 
 @admin.register(TipoCosto)
@@ -87,6 +96,13 @@ class CostoAdmin(admin.ModelAdmin):
     list_display = ("cultivo", "tipo_costo", "valor", "campania", "lote")
     list_filter = ("tipo_costo", "campania", "lote")
     search_fields = ("cultivo__codigo", "tipo_costo__codigo")
+
+
+@admin.register(LimiteSuperficieCultivoCampania)
+class LimiteSuperficieCultivoCampaniaAdmin(admin.ModelAdmin):
+    list_display = ("cultivo", "campania", "min_ha", "max_ha")
+    list_filter = ("campania", "cultivo")
+    search_fields = ("cultivo__codigo", "campania__codigo")
 
 
 @admin.register(RendimientoCultivoSuelo)
@@ -133,7 +149,8 @@ class ImpactoRotacionAdmin(admin.ModelAdmin):
 
 @admin.register(CampaniaHistorica)
 class CampaniaHistoricaAdmin(admin.ModelAdmin):
-    list_display = ("codigo", "orden")
+    list_display = ("codigo", "anio_inicio")
+    ordering = ("-anio_inicio",)
     search_fields = ("codigo",)
 
 

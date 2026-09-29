@@ -191,7 +191,7 @@
               <!-- Renderizar Barras de Cultivo -->
               {% for bar in gantt_data %} {% if bar.lote == lote_cod %}
               <div
-                @mouseenter="hoveredBar = '{{ bar.lote }}-{{ bar.slot }}'"
+                @mouseenter="hoveredBar = '{{ bar.lote|escapejs }}-{{ bar.slot|escapejs }}'"
                 @mouseleave="hoveredBar = null"
                 class="absolute top-1.5 bottom-1.5 rounded-lg flex items-center justify-center text-[10px] font-bold tracking-wide shadow-sm cursor-pointer hover:brightness-95 transition duration-200 {% if bar.cultivo == 'TRIGO' %}crop-trigo{% elif bar.cultivo == 'SOJA' or bar.cultivo == 'SOJA II' %}crop-soja{% elif bar.cultivo == 'MAIZ' or bar.cultivo == 'MAIZ II' %}crop-maiz{% elif bar.cultivo == 'COLZA' %}crop-colza{% elif bar.cultivo == 'BARBECHO' %}crop-barbecho{% else %}crop-default{% endif %}"
                 style="left: calc(({{ bar.dia_siembra|unlocalize }} + 77) / 1172 * 100%); width: calc({{ bar.duration|unlocalize }} / 1172 * 100%);"
@@ -217,7 +217,7 @@
       >
         {% for bar in gantt_data %}
         <div
-          x-show="hoveredBar === '{{ bar.lote }}-{{ bar.slot }}'"
+          x-show="hoveredBar === '{{ bar.lote|escapejs }}-{{ bar.slot|escapejs }}'"
           x-transition:enter="transition ease-out duration-200"
           x-transition:enter-start="opacity-0 scale-95"
           x-transition:enter-end="opacity-100 scale-100"
