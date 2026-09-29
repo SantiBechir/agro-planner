@@ -21,10 +21,14 @@ de seguridad impedirán el arranque.
 
 ## Configuración del servidor
 
-Este Compose publica `127.0.0.1:8000` y supone que el proxy está en el mismo host.
-Si el proxy está en otro servidor o contenedor, la facultad debe definir una
-conexión privada y permitir únicamente su dirección; localhost no será accesible
-desde ese otro servidor. No cambiar el bind a todas las interfaces como solución.
+Por defecto Compose publica `127.0.0.1:8000`, para un proxy en el mismo host.
+Si el proxy está en otro servidor, configurar `WEB_BIND_ADDRESS` con una IP
+privada asignada al host de la aplicación, y permitir únicamente la dirección
+del proxy en la red/firewall de la facultad. No usar `0.0.0.0` para este caso.
+La IP de bind pertenece al servidor de Django, no al servidor del proxy.
+Si el proxy está en otro contenedor, definir una conexión privada entre ambos
+contenedores o un acceso restringido a la IP privada del host.
+Localhost no es accesible desde otro servidor ni desde una computadora con VPN.
 Postgres no publica puertos en el host y solo es accesible en la red Docker.
 
 Completar `.env` en el servidor, sin subirlo a Git:
@@ -39,6 +43,7 @@ POSTGRES_PASSWORD=<contraseña larga, aleatoria y exclusiva>
 ALLOWED_HOSTS=agro.example.edu.ar
 CSRF_TRUSTED_ORIGINS=https://agro.example.edu.ar
 SECURE_SSL_REDIRECT=true
+WEB_BIND_ADDRESS=127.0.0.1
 WEB_PORT=8000
 TRUST_PROXY_CLIENT_IP=true
 SOLVER_TIME_LIMIT=300
@@ -49,6 +54,39 @@ MAX_ACTIVE_PLANIFICATIONS=5
 Cambiar el dominio de ejemplo por el definitivo. `ALLOWED_HOSTS` no lleva
 esquema ni puerto; `CSRF_TRUSTED_ORIGINS` sí lleva `https://` y el puerto si es
 distinto de 443. No usar comodines.
+
+### Proxy externo y comprobación desde la VPN
+
+Por ejemplo, si el host de Django tiene la IP privada `10.10.66.73`, cambiar
+en su `.env` únicamente `WEB_BIND_ADDRESS=10.10.66.73`. Mantener
+`SECURE_SSL_REDIRECT=true` y las cookies seguras. Recrear el servicio web:
+
+```bash
+docker compose up -d --no-deps web
+docker compose ps web
+```
+
+La publicación debe mostrar `10.10.66.73:8000->8000/tcp`. El destino del proxy
+es `http://10.10.66.73:8000`, mientras que el navegador usa el dominio HTTPS.
+El proxy debe conservar `Host` y reemplazar `X-Forwarded-Proto` por `https`.
+Desde una máquina autorizada en esa red, comprobar el backend simulando esos
+headers (reemplazar el dominio por el real):
+
+```bash
+curl --max-time 10 -D - -o /dev/null \
+  -H 'Host: agro.example.edu.ar' \
+  -H 'X-Forwarded-Proto: https' \
+  http://10.10.66.73:8000/login/
+```
+
+Esperar `200`. Una visita directa por HTTP desde el navegador puede redirigir
+a HTTPS: publicar el puerto en la red privada no habilita el login por HTTP.
+Si el TCP aún no conecta, comprobar rutas y reglas de la VPN con el administrador.
+Docker publica puertos mediante sus propias reglas de firewall; no asumir que
+una regla de UFW por sí sola restringe ese tráfico. Ver la
+[documentación de Docker](https://docs.docker.com/engine/network/packet-filtering-firewalls/#docker-and-ufw).
+
+### Secretos y headers del proxy
 
 Generar cada secreto por separado en el servidor, por ejemplo:
 
@@ -115,7 +153,8 @@ silencian explícitamente. Las demás advertencias impiden el arranque.
 ## Verificación antes de habilitar el dominio
 
 1. El certificado HTTPS es válido y HTTP redirige a HTTPS.
-2. Desde otra máquina, `IP_DEL_SERVER:8000` y `:5432` no son accesibles.
+2. El puerto 8000 solo es accesible desde el proxy por la conexión privada
+   elegida (y desde equipos autorizados para diagnóstico); 5432 no se publica.
 3. Desde el proxy, el backend responde y no hay bucles de redirección.
 4. Login, logout, edición y creación de planificaciones funcionan por HTTPS;
    las cookies de sesión y CSRF tienen `Secure` y la sesión tiene `HttpOnly`.

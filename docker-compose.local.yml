@@ -11,6 +11,9 @@ services:
 
   web:
     environment: *local-env
+    # Compose >= 2.24.4: reemplazar la publicación de producción, sin añadirla.
+    ports: !override
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
     command:
       - sh
       - -c

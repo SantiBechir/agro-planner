@@ -53,7 +53,8 @@ migración crea cuentas ni contiene contraseñas.
 | `DATABASE_SSL_REQUIRE`  | SSL hacia Postgres en producción (default `True`)   | `False` en redes Docker internas      |
 | `SECURE_SSL_REDIRECT`   | Redirect HTTP→HTTPS en producción (default `True`)  | `True`                               |
 | `TRUST_PROXY_CLIENT_IP` | Leer X-Real-IP, solo con proxy que reemplace el header y backend privado | `True` con proxy configurado |
-| `WEB_PORT`             | Puerto del host, publicado solo en 127.0.0.1       | `8000`                               |
+| `WEB_BIND_ADDRESS`     | IP del host para el backend; default `127.0.0.1`   | IP privada del servidor con proxy externo |
+| `WEB_PORT`             | Puerto del backend en esa IP del host              | `8000`                               |
 | `SOLVER_TIME_LIMIT`    | Límite de resolución en segundos                   | `300`                                |
 | `SOLVER_THREADS`       | Hilos del solver                                   | `2`                                  |
 | `MAX_ACTIVE_PLANIFICATIONS` | Máximo global de trabajos pendientes/en ejecución | `5`                            |
@@ -83,6 +84,9 @@ docker compose exec web python manage.py createsuperuser
 ```
 
 El backend queda en `127.0.0.1:8000` por HTTP para el proxy del servidor.
+Si el proxy corre en otro equipo, configurar `WEB_BIND_ADDRESS` con la IP
+privada del servidor de la aplicación y restringir el acceso desde la red del
+proxy. La VPN no permite alcanzar un puerto publicado exclusivamente en localhost.
 Los usuarios acceden por el dominio **HTTPS**; no publicar el 8000 a Internet.
 Compose construye `DATABASE_URL` desde `POSTGRES_*` y desactiva
 `DATABASE_SSL_REQUIRE` únicamente para la red Docker interna. El arranque web
@@ -106,7 +110,8 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
 Abrir `http://localhost:8000`. Este archivo adicional habilita las cookies por
-HTTP únicamente para pruebas locales y conserva el puerto en `127.0.0.1`.
+HTTP únicamente para pruebas locales y fuerza el puerto a `127.0.0.1`, aunque
+el `.env` tenga una IP privada en `WEB_BIND_ADDRESS`. Requiere Compose >= 2.24.4.
 Mantener ambos `-f` al ejecutar `logs`, `exec`, `up` o `down` en este modo.
 No usar `docker-compose.local.yml` en la facultad: el comando de producción
 es `docker compose up -d --build`, con el `.env` y el proxy HTTPS del servidor.
