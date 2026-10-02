@@ -7,6 +7,8 @@ from .production import *
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
 CSRF_TRUSTED_ORIGINS = []
 SECURE_SSL_REDIRECT = False
+# HTTP en loopback es intencional en este modo; mantener fatales las demás advertencias.
+SILENCED_SYSTEM_CHECKS = [*SILENCED_SYSTEM_CHECKS, "security.W008"]
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 SECURE_HSTS_SECONDS = 0
