@@ -44,7 +44,7 @@ def _build_gantt_data(asignaciones):
 
 @login_required(login_url="login")
 def planificacion_list(request):
-    planificaciones = Planificacion.objects.all().order_by("-fecha_creacion")
+    planificaciones = Planificacion.objects.filter(usuario=request.user).order_by("-fecha_creacion")
     return render(
         request,
         "core/planificaciones.html",
@@ -67,7 +67,7 @@ def ejecutar_optimizacion(request):
 
 
 def _respuesta_estado(request, pk):
-    planificacion = get_object_or_404(Planificacion, pk=pk)
+    planificacion = get_object_or_404(Planificacion, pk=pk, usuario=request.user)
 
     if planificacion.estado == Planificacion.Estado.COMPLETADO:
         asignaciones = planificacion.asignaciones.select_related(
@@ -81,12 +81,12 @@ def _respuesta_estado(request, pk):
         }
         return render(request, "core/resultados_planificacion.html", context)
 
-    if planificacion.estado == Planificacion.Estado.ERROR:
+    if planificacion.estado in (Planificacion.Estado.ERROR, Planificacion.Estado.INFACTIBLE):
         return render(
             request,
             "core/resultados_planificacion.html",
             {
-                "error": "Ocurrió un error al ejecutar el solver. Verifica la configuración de datos en tu base de datos.",
+                "error": planificacion.detalle_error or "Ocurrió un error al ejecutar el solver. Verifica la configuración de datos en tu base de datos.",
                 "planificacion": planificacion,
             },
         )

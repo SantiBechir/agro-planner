@@ -9,7 +9,7 @@ from .service_support import ServiceTestCase
 class PlanificacionStatusTest(ServiceTestCase):
     def test_both_endpoints_preserve_all_states_and_completed_results(self):
         self.client.force_login(self.reader)
-        plan = Planificacion.objects.create(nombre="Estados")
+        plan = Planificacion.objects.create(nombre="Estados", usuario=self.reader)
         slot = SlotSiembra.objects.create(codigo="T1", orden=1, campania=self.campania)
         AsignacionLoteSlot.objects.create(
             planificacion=plan, lote=self.lote, cultivo=self.cultivo, slot=slot,
@@ -31,7 +31,7 @@ class PlanificacionStatusTest(ServiceTestCase):
                         if state == Planificacion.Estado.COMPLETADO:
                             self.assertEqual(response.context["gantt_data"][0]["profit"], 750)
                             self.assertEqual(response.context["lotes_list"], ["J1"])
-                        elif state == Planificacion.Estado.ERROR:
+                        elif state in (Planificacion.Estado.ERROR, Planificacion.Estado.INFACTIBLE):
                             self.assertIn("Ocurrió un error al ejecutar el solver", response.context["error"])
             solver.assert_not_called()
         plan.refresh_from_db()

@@ -169,9 +169,9 @@ class AsignacionInline(admin.TabularInline):
 
 @admin.register(Planificacion)
 class PlanificacionAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "fecha_creacion", "profit", "ilu", "estado")
-    list_filter = ("estado", "fecha_creacion")
-    search_fields = ("nombre",)
+    list_display = ("nombre", "usuario", "fecha_creacion", "profit", "ilu", "estado")
+    list_filter = ("estado", "fecha_creacion", "usuario")
+    search_fields = ("nombre", "usuario__email")
     inlines = [AsignacionInline]
 
 

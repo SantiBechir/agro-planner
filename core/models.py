@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.db import models
 from django.db.models.functions import Lower
 
@@ -368,9 +369,24 @@ class Planificacion(models.Model):
         PENDIENTE = "pendiente", "Pendiente"
         EJECUTANDO = "ejecutando", "Ejecutando"
         COMPLETADO = "completado", "Completado"
+        INFACTIBLE = "infactible", "Infactible"
         ERROR = "error", "Error"
 
     nombre = models.CharField(max_length=100)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="planificaciones",
+        null=True,
+        blank=True,
+    )
+    origen = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="replanificaciones",
+    )
+    escenario = models.JSONField(default=dict, blank=True)
+    datos_entrada = models.JSONField(null=True, blank=True)
+    detalle_error = models.TextField(blank=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     profit = models.FloatField(null=True, blank=True)
     ilu = models.FloatField(null=True, blank=True)

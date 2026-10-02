@@ -24,5 +24,5 @@ def solicitar_planificacion(actor, *, nombre):
         if active >= settings.MAX_ACTIVE_PLANIFICATIONS:
             raise ValidationError("Hay demasiadas planificaciones en espera. Intentá cuando termine alguna.")
         return Planificacion.objects.create(
-            nombre=nombre, estado=Planificacion.Estado.PENDIENTE,
+            nombre=nombre, usuario=actor, estado=Planificacion.Estado.PENDIENTE,
         )
