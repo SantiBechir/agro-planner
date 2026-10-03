@@ -12,12 +12,12 @@ TRADUCCIONES_TIPO_COSTO = {
     "hc": "Costo de cosecha",
     "frc": "Costo fijo de arrendamiento",
     "vr": "Costo variable de arrendamiento",
-    "tf": "Comision de comercializacion",
-    "scp": "Produccion acondicionada",
+    "tf": "Comisión de comercialización",
+    "scp": "Producción acondicionada",
     "cp": "Costo de acondicionamiento",
-    "st": "Proporcion de transporte corto / embolsado",
-    "cst": "Costo de flete corta distancia",
-    "clt": "Costo de flete larga distancia",
+    "st": "Proporción de transporte corto / embolsado",
+    "cst": "Costo de flete de corta distancia",
+    "clt": "Costo de flete de larga distancia",
 }
 
 DETALLES_TIPO_COSTO = {
@@ -288,7 +288,7 @@ def preparar_graficos_margen(margin_indicator_rows, *, mb_selected_campanias, mb
     return mb_cost_charts
 
 
-def preparar_grafico_indiferencia(indicator_data, *, ri_selected_campanias, ri_selected_suelos, ri_selected_cultivos, ri_cultivo_mode):
+def preparar_grafico_indiferencia(indicator_data, *, ri_selected_campanias, ri_selected_cultivos, ri_cultivo_mode):
     ri_chart_rows = [
         row
         for row in indicator_data["break_even"]
@@ -300,10 +300,6 @@ def preparar_grafico_indiferencia(indicator_data, *, ri_selected_campanias, ri_s
             for row in ri_chart_rows
             if str(row["campania_id"]) in ri_selected_campanias
         ]
-    if ri_selected_suelos:
-        ri_chart_rows = [
-            row for row in ri_chart_rows if str(row["suelo_id"]) in ri_selected_suelos
-        ]
     if ri_cultivo_mode == "selected":
         ri_chart_rows = [
             row
@@ -311,14 +307,25 @@ def preparar_grafico_indiferencia(indicator_data, *, ri_selected_campanias, ri_s
             if str(row["cultivo_id"]) in ri_selected_cultivos
         ]
 
+    # El rendimiento de indiferencia no varía por suelo: se conserva una única
+    # observación por cultivo y campaña para que no se repita en el gráfico.
+    rows_by_crop_and_campaign = {}
+    for row in sorted(
+        ri_chart_rows,
+        key=lambda row: (row["campania_id"], row["cultivo_id"], row["suelo_id"]),
+    ):
+        rows_by_crop_and_campaign.setdefault(
+            (row["cultivo_id"], row["campania_id"]), row,
+        )
+    ri_chart_rows = list(rows_by_crop_and_campaign.values())
+
     chart_labels = sorted({row["cultivo"] for row in ri_chart_rows})
     chart_groups = {}
     for row in ri_chart_rows:
-        group = (row["suelo_id"], row["campania_id"])
+        group = row["campania_id"]
         chart_groups.setdefault(
             group,
             {
-                "suelo": row["suelo"],
                 "campania": row["campania"],
                 "campania_id": row["campania_id"],
                 "values": {},
@@ -328,35 +335,17 @@ def preparar_grafico_indiferencia(indicator_data, *, ri_selected_campanias, ri_s
         )
     campaign_ids = sorted({row["campania_id"] for row in ri_chart_rows})
     campaign_position = {campania_id: index for index, campania_id in enumerate(campaign_ids)}
-    soil_colors = {
-        "Molisol": "#4d8b4f",
-        "Alfisol": "#4f86d9",
-        "Vertisol": "#f59e0b",
-    }
-
-    def campaign_tone(base_color, position):
-        """Keep a soil's hue and lighten it for later campaigns."""
-        red, green, blue = (int(base_color[index : index + 2], 16) for index in (1, 3, 5))
-        lightness = min(position * 0.22, 0.55)
-        return "#{:02x}{:02x}{:02x}".format(
-            round(red + (255 - red) * lightness),
-            round(green + (255 - green) * lightness),
-            round(blue + (255 - blue) * lightness),
-        )
-
     ordered_chart_groups = sorted(
-        chart_groups.values(), key=lambda group: (group["campania_id"], group["suelo"])
+        chart_groups.values(), key=lambda group: group["campania_id"]
     )
+    campaign_colors = ["#4d8b4f", "#4f86d9", "#f59e0b", "#8b5cf6", "#e11d48"]
     ri_chart_data = {
         "labels": chart_labels,
         "datasets": [
             {
-                "label": f"{group['suelo']} · {group['campania']}",
+                "label": group["campania"],
                 "data": [group["values"].get(cultivo) for cultivo in chart_labels],
-                "backgroundColor": campaign_tone(
-                    soil_colors.get(group["suelo"], "#64748b"),
-                    campaign_position[group["campania_id"]],
-                ),
+                "backgroundColor": campaign_colors[campaign_position[group["campania_id"]] % len(campaign_colors)],
                 "borderRadius": 6,
                 "maxBarThickness": 42,
             }
@@ -377,7 +366,7 @@ def preparar_grafico_indiferencia(indicator_data, *, ri_selected_campanias, ri_s
         "ri_chart_has_data": bool(ri_chart_rows),
         "ri_chart_legend": ri_chart_legend,
         "ri_chart_campaign_count": len({row["campania_id"] for row in ri_chart_rows}),
-        "ri_chart_soil_count": len({row["suelo_id"] for row in ri_chart_rows}),
+        "ri_chart_crop_count": len({row["cultivo_id"] for row in ri_chart_rows}),
         "ri_maximo": ri_maximo,
         "ri_maximo_kg": round(ri_maximo["rendimiento_indiferencia"] * 1000) if ri_maximo else None,
     }

@@ -147,10 +147,6 @@
             <label class="block text-[10px] font-bold text-slate-400 mb-0.5">Nombre del lote</label>
             <input type="text" name="nombre" value="{{ lote.nombre }}" required class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]" />
           </div>
-          <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
-            <input type="checkbox" name="habilitado" value="1" {% if lote.habilitado %}checked{% endif %} class="rounded border-slate-300 text-[#4d8b4f] focus:ring-[#4d8b4f]" />
-            Lote habilitado para planificación
-          </label>
           <div>
             <label class="block text-[10px] font-bold text-slate-400 mb-0.5">Cantidad de ambientes</label>
             <select x-model.number="numAmbientes" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]">
@@ -220,15 +216,15 @@
                 {% csrf_token %}
                 <input type="hidden" name="anio_inicio" value="{{ campania.anio_inicio }}" />
                 <div class="grid grid-cols-3 gap-2">
-                  <select name="cultivo_1" required class="col-span-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs">
-                    {% for cultivo in cultivos %}<option value="{{ cultivo.id }}" {% if cultivo.id == campania.cultivo_1.id %}selected{% endif %}>{{ cultivo.nombre }}</option>{% endfor %}
+                  <select name="cultivo_1" required data-history-crop-primary class="col-span-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs">
+                    {% for cultivo in cultivos %}<option value="{{ cultivo.id }}" data-season="{{ cultivo.estacion_historial }}" {% if cultivo.id == campania.cultivo_1.id %}selected{% endif %}>{{ cultivo.nombre }} · {{ cultivo.estacion_historial }}</option>{% endfor %}
                   </select>
                   <input type="number" name="rendimiento_1" value="{{ campania.rendimiento_1|default_if_none:'' }}" min="0" step="any" placeholder="kg/ha" class="bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs" />
                 </div>
                 <div class="grid grid-cols-3 gap-2">
-                  <select name="cultivo_2" class="col-span-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs">
+                  <select name="cultivo_2" data-history-crop-secondary class="col-span-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs">
                     <option value="">Sin segundo cultivo</option>
-                    {% for cultivo in cultivos %}<option value="{{ cultivo.id }}" {% if campania.cultivo_2 and cultivo.id == campania.cultivo_2.id %}selected{% endif %}>{{ cultivo.nombre }}</option>{% endfor %}
+                    {% for cultivo in cultivos %}<option value="{{ cultivo.id }}" data-season="{{ cultivo.estacion_historial }}" {% if campania.cultivo_2 and cultivo.id == campania.cultivo_2.id %}selected{% endif %}>{{ cultivo.nombre }} · {{ cultivo.estacion_historial }}</option>{% endfor %}
                   </select>
                   <input type="number" name="rendimiento_2" value="{{ campania.rendimiento_2|default_if_none:'' }}" min="0" step="any" placeholder="kg/ha" class="bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs" />
                 </div>
@@ -286,11 +282,12 @@
               <select
                 name="cultivo_1"
                 required
+                data-history-crop-primary
                 class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
               >
                 <option value="" disabled selected>Seleccionar...</option>
                 {% for cultivo in cultivos %}
-                <option value="{{ cultivo.id }}">{{ cultivo.nombre }}</option>
+                <option value="{{ cultivo.id }}" data-season="{{ cultivo.estacion_historial }}">{{ cultivo.nombre }} · {{ cultivo.estacion_historial }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -316,11 +313,12 @@
               >
               <select
                 name="cultivo_2"
+                data-history-crop-secondary
                 class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-[#4d8b4f]"
               >
                 <option value="" selected>Sin segundo cultivo</option>
                 {% for cultivo in cultivos %}
-                <option value="{{ cultivo.id }}">{{ cultivo.nombre }}</option>
+                <option value="{{ cultivo.id }}" data-season="{{ cultivo.estacion_historial }}">{{ cultivo.nombre }} · {{ cultivo.estacion_historial }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -557,3 +555,26 @@
   </div>
   {% endif %}
 </div>
+<script>
+(() => {
+  const root = document.getElementById("main-content") || document;
+  root.querySelectorAll("[data-history-crop-primary]").forEach((primary) => {
+    const secondary = primary.form?.querySelector("[data-history-crop-secondary]");
+    if (!secondary || primary.dataset.seasonBound) return;
+    primary.dataset.seasonBound = "true";
+
+    const updateSecondaryOptions = () => {
+      const selectedSeason = primary.selectedOptions[0]?.dataset.season;
+      secondary.querySelectorAll("option[data-season]").forEach((option) => {
+        const sameSeason = Boolean(selectedSeason) && option.dataset.season === selectedSeason;
+        option.disabled = sameSeason;
+        option.hidden = sameSeason;
+      });
+      if (secondary.selectedOptions[0]?.disabled) secondary.value = "";
+    };
+
+    primary.addEventListener("change", updateSecondaryOptions);
+    updateSecondaryOptions();
+  });
+})();
+</script>
