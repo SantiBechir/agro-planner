@@ -42,6 +42,7 @@ class CargarInputHistorialMappingTest(TestCase):
             )
 
         cultivo = Cultivo.objects.get(codigo="COLZA")
+        self.assertIsNone(cultivo.creado_por_id)
         campania = Campania.objects.get(codigo="C1")
         components = {
             costo.tipo_costo.codigo: costo.valor

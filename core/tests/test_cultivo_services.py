@@ -27,6 +27,7 @@ class CultivoServiceTest(ServiceTestCase):
 
     def test_creates_pending_crop_and_economic_configuration(self):
         cultivo = crear_cultivo(self.editor, **self.datos_cultivo())
+        self.assertEqual(cultivo.creado_por, self.editor)
         self.assertFalse(cultivo.habilitado_optimizacion)
         costo = cultivo.costo_set.get()
         self.assertEqual(costo.campania_id, self.campania.pk)

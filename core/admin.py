@@ -54,13 +54,14 @@ class CultivoAdmin(admin.ModelAdmin):
     list_display = (
         "codigo",
         "nombre",
+        "creado_por",
         "tipo",
         "duracion_dias",
         "siembra_inicio",
         "siembra_fin",
         "no_repetir_sin_intermedio",
     )
-    list_filter = ("tipo", "no_repetir_sin_intermedio")
+    list_filter = ("tipo", "no_repetir_sin_intermedio", "creado_por")
     search_fields = ("codigo", "nombre")
 
 

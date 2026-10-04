@@ -11,6 +11,7 @@ urlpatterns = [
     path("lotes/<int:pk>/historial/<int:anio_inicio>/eliminar/", views.lote_historial_delete, name="lote_historial_delete"),
     path("cultivos/", views.cultivo_list, name="cultivo_list"),
     path("cultivos/crear/", views.cultivo_create, name="cultivo_create"),
+    path("cultivos/<int:pk>/eliminar/", views.cultivo_delete, name="cultivo_delete"),
     path("costos/", views.costo_list, name="costo_list"),
     path("planificaciones/", views.planificacion_list, name="planificacion_list"),
     path("planificaciones/ejecutar/", views.ejecutar_optimizacion, name="ejecutar_optimizacion"),

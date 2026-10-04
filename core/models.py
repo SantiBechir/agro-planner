@@ -65,6 +65,13 @@ class Cultivo(models.Model):
 
     codigo = models.CharField(max_length=50, unique=True)
     nombre = models.CharField(max_length=100)
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cultivos_creados",
+    )
     tipo = models.CharField(
         max_length=20, choices=Tipo.choices, default=Tipo.OTRO
     )

@@ -627,7 +627,7 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
         crops[code] = _upsert(
             Cultivo,
             {"codigo": code},
-            {"nombre": code, "tipo": crop_type, **params, "no_repetir_sin_intermedio": code in data.cultivos_no_secuenciales, "habilitado_optimizacion": True},
+            {"nombre": code, "tipo": crop_type, **params, "no_repetir_sin_intermedio": code in data.cultivos_no_secuenciales, "habilitado_optimizacion": True, "creado_por": None},
             stats,
             "Cultivo",
         )
