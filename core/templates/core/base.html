@@ -98,6 +98,58 @@
             button.classList.toggle('opacity-40', visible);
             button.classList.toggle('line-through', visible);
         }
+        function switchCostAnalysisTab(targetTab, endpoint, targetView = 'grafico') {
+            const root = document.getElementById('main-content') || document;
+            const savedKey = 'agroplanner_cost_analysis_selection';
+            sessionStorage.setItem('agroplanner_cost_active_tab', targetTab);
+            const emptySelection = () => ({ campaigns: [], crops: [], cropMode: 'selected' });
+            let savedSelections = { margenes: emptySelection(), indiferencia: emptySelection() };
+            try {
+                savedSelections = { ...savedSelections, ...(JSON.parse(sessionStorage.getItem(savedKey)) || {}) };
+            } catch (_) {
+                // A storage failure must not block tab navigation.
+            }
+
+            const sourceTab = root.querySelector('input[name="tab"][value="margenes"]')
+                ? 'margenes'
+                : root.querySelector('input[name="tab"][value="indiferencia"]')
+                    ? 'indiferencia'
+                    : null;
+            const sourcePrefix = sourceTab === 'margenes' ? 'mb' : 'ri';
+            const targetPrefix = targetTab === 'margenes' ? 'mb' : 'ri';
+            const params = new URLSearchParams({
+                tab: targetTab,
+            });
+
+            if (sourceTab) {
+                const hasComparisonPicker = root.querySelector(`input[name="${sourcePrefix}_campania"]`);
+                const campaigns = hasComparisonPicker
+                    ? Array.from(root.querySelectorAll(`input[name="${sourcePrefix}_campania"]:checked`)).map((input) => input.value)
+                    : [root.querySelector('select[name="campania"]')?.value].filter(Boolean);
+                const crops = hasComparisonPicker
+                    ? Array.from(root.querySelectorAll(`input[name="${sourcePrefix}_cultivo"]:checked`)).map((input) => input.value)
+                    : [root.querySelector('select[name="cultivo"]')?.value].filter(Boolean);
+                if (hasComparisonPicker || campaigns.length || crops.length) {
+                    savedSelections[sourceTab] = {
+                        campaigns,
+                        crops,
+                        cropMode: root.querySelector(`#${sourcePrefix}-cultivo-mode`)?.value || 'selected',
+                    };
+                }
+                sessionStorage.setItem(savedKey, JSON.stringify(savedSelections));
+            }
+
+            if (targetTab !== 'detalle') {
+                const targetSelection = savedSelections[targetTab] || emptySelection();
+                params.set(`${targetPrefix}_view`, targetView);
+                targetSelection.campaigns.forEach((value) => params.append(`${targetPrefix}_campania`, value));
+                targetSelection.crops.forEach((value) => params.append(`${targetPrefix}_cultivo`, value));
+                params.set(`${targetPrefix}_cultivo_mode`, targetSelection.cropMode);
+            }
+
+            htmx.ajax('GET', `${endpoint}?${params.toString()}`, '#main-content');
+            root.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         function formatRiMaximumYield() {
             document.querySelectorAll('p').forEach((element) => {
                 const match = element.textContent.trim().match(/^(\d+) kg\/ha$/);

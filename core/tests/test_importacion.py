@@ -90,6 +90,20 @@ class CargarInputHistorialMappingTest(TestCase):
             ),
         )
 
+    def test_reimport_preserves_manual_lot_disablement(self):
+        input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
+        command = CargarInputCommand(stdout=StringIO())
+        command.handle(archivo=str(input_path))
+
+        lote = Lote.objects.get(codigo="J1")
+        lote.habilitado = False
+        lote.save(update_fields=["habilitado"])
+
+        command.handle(archivo=str(input_path))
+
+        lote.refresh_from_db()
+        self.assertFalse(lote.habilitado)
+
     def test_import_disables_absent_entities_and_removes_legacy_sc(self):
         input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
         stale_soil = TipoSuelo.objects.create(codigo="S_OLD", nombre="Viejo")

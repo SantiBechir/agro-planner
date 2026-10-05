@@ -13,7 +13,7 @@ class ServiceAuthorizationTest(ServiceTestCase):
         for actor in (self.reader, AnonymousUser()):
             operations = (
                 lambda: lotes.crear_lote(actor, nombre="Nuevo", ambientes=[(self.suelo.pk, "M", 10)]),
-                lambda: lotes.actualizar_lote(actor, self.lote.pk, nombre="Otro", ambientes=[], habilitado=False),
+                lambda: lotes.actualizar_lote(actor, self.lote.pk, nombre="Otro", ambientes=[]),
                 lambda: lotes.alternar_lote(actor, self.lote.pk),
                 lambda: historial.cargar_historial(actor, self.lote.pk, anio_inicio=2024, cultivo_1_id=self.cultivo.pk),
                 lambda: historial.eliminar_historial(actor, self.lote.pk, anio_inicio=2024),

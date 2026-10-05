@@ -162,6 +162,20 @@ class LoteHistorialAddTest(TestCase):
         self.assertIn("distinto del primero", msgs.text())
         self.assertFalse(HistorialLoteCultivo.objects.exists())
 
+    def test_two_crops_from_the_same_season_are_rejected(self):
+        maiz = Cultivo.objects.create(
+            codigo="MAIZ", nombre="Maíz", tipo=Cultivo.Tipo.PRINCIPAL,
+            duracion_dias=120, siembra_inicio=120, siembra_fin=180,
+        )
+        response, msgs = self._post_historial({
+            "anio_inicio": "2024",
+            "cultivo_1": str(self.soja.id),
+            "cultivo_2": str(maiz.id),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("dos cultivos de verano", msgs.text())
+        self.assertFalse(HistorialLoteCultivo.objects.exists())
+
     def test_current_or_future_campaign_is_rejected(self):
         for anio in ("2025", "2026"):
             response, msgs = self._post_historial({
