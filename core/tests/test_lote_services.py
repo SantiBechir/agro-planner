@@ -18,7 +18,7 @@ class LoteServiceTest(ServiceTestCase):
         with patch("core.services.lotes.Ambiente.objects.bulk_create", side_effect=RuntimeError("fallo")):
             with self.assertRaises(RuntimeError):
                 lotes.actualizar_lote(
-                    self.editor, self.lote.pk, nombre="Modificado", habilitado=False,
+                    self.editor, self.lote.pk, nombre="Modificado",
                     ambientes=[(self.suelo.pk, "A", 20)],
                 )
         self.lote.refresh_from_db()

@@ -73,7 +73,7 @@ class EconomicPresentationTest(SimpleTestCase):
         self.assertEqual(len(economia.preparar_graficos_margen([self.margin_row()], mb_cultivo_mode="all", **args)), 1)
         result = economia.preparar_grafico_indiferencia(
             {"break_even": [self.break_even_row()]}, ri_selected_campanias=[],
-            ri_selected_suelos=[], ri_selected_cultivos=[], ri_cultivo_mode="selected",
+            ri_selected_cultivos=[], ri_cultivo_mode="selected",
         )
         self.assertFalse(result["ri_chart_has_data"])
         self.assertEqual(json.loads(result["ri_chart_data"]), {"labels": [], "datasets": []})
@@ -88,17 +88,16 @@ class EconomicPresentationTest(SimpleTestCase):
             self.break_even_row(cultivo="SIN_PRECIO", cultivo_id=3, rendimiento_indiferencia=None),
         ]
         result = economia.preparar_grafico_indiferencia(
-            {"break_even": rows}, ri_selected_campanias=[], ri_selected_suelos=[],
+            {"break_even": rows}, ri_selected_campanias=[],
             ri_selected_cultivos=[], ri_cultivo_mode="all",
         )
         data = json.loads(result["ri_chart_data"])
         self.assertEqual(data["labels"], ["SOJA", "TRIGO"])
         self.assertEqual([d["data"] for d in data["datasets"]], [[700, 500], [None, 800]])
         self.assertEqual(data["datasets"][0]["backgroundColor"], "#4d8b4f")
-        self.assertEqual(data["datasets"][1]["backgroundColor"], "#74a576")
+        self.assertEqual(data["datasets"][1]["backgroundColor"], "#4f86d9")
         self.assertEqual(result["ri_maximo_kg"], 800)
         self.assertEqual(result["ri_chart_campaign_count"], 2)
-        self.assertEqual(result["ri_chart_soil_count"], 1)
 
     def test_tables_preserve_missing_levels_and_break_even(self):
         data = economia.preparar_tablas({"margins": [self.margin_row()], "break_even": [self.break_even_row()]})

@@ -1,8 +1,18 @@
 from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from core.views import ejecutar_optimizacion
 from accounts.roles import READER_ROLE, set_functional_role
-from core.models import Planificacion
+from core.models import (
+    Campania,
+    CompatibilidadCultivoSuelo,
+    Cultivo,
+    LimiteSuperficieCultivoCampania,
+    Lote,
+    Planificacion,
+    TipoSuelo,
+)
+from core.services.planificaciones import solicitar_planificacion
 from django.template.loader import render_to_string
 
 
@@ -21,6 +31,12 @@ class EjecutarOptimizacionDirectTest(TestCase):
         self.factory = RequestFactory()
 
     def test_creates_pending_job_without_running_solver_in_request(self):
+        suelo = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
+        Lote.objects.create(
+            codigo="J1", nombre="Activo", superficie_ha=100,
+            max_cultivos_principales=10, max_cultivos_secundarios=10,
+            tipo_suelo=suelo, habilitado=True,
+        )
         request = self.factory.post(
             "/planificaciones/ejecutar/",
             {"nombre": "Planificacion asincrona"},
@@ -36,6 +52,63 @@ class EjecutarOptimizacionDirectTest(TestCase):
             f"/planificaciones/{planificacion.id}/estado/",
             fetch_redirect_response=False,
         )
+
+    def test_rejects_when_enabled_lots_cannot_cover_required_minimum(self):
+        suelo = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
+        Lote.objects.create(
+            codigo="J1", nombre="Activo", superficie_ha=50,
+            max_cultivos_principales=10, max_cultivos_secundarios=10,
+            tipo_suelo=suelo, habilitado=True,
+        )
+        Lote.objects.create(
+            codigo="J2", nombre="Desactivado", superficie_ha=100,
+            max_cultivos_principales=10, max_cultivos_secundarios=10,
+            tipo_suelo=suelo, habilitado=False,
+        )
+        cultivo = Cultivo.objects.create(
+            codigo="RGRASS", nombre="R. Grass", tipo=Cultivo.Tipo.PRINCIPAL,
+            duracion_dias=120, siembra_inicio=10, siembra_fin=90,
+        )
+        campania = Campania.objects.create(
+            codigo="C1", orden=1, fecha_inicio="2025-06-01", fecha_fin="2026-05-31",
+        )
+        CompatibilidadCultivoSuelo.objects.create(
+            cultivo=cultivo, tipo_suelo=suelo, compatible=True,
+        )
+        LimiteSuperficieCultivoCampania.objects.create(
+            cultivo=cultivo, campania=campania, min_ha=60, max_ha=60,
+        )
+
+        with self.assertRaisesMessage(ValidationError, "se requieren al menos 60 ha"):
+            solicitar_planificacion(self.user, nombre="Planificación de prueba")
+
+        self.assertFalse(Planificacion.objects.exists())
+
+    def test_rejects_when_no_enabled_lot_combination_reaches_exact_limit(self):
+        suelo = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
+        for codigo, superficie in (("J1", 50), ("J2", 40)):
+            Lote.objects.create(
+                codigo=codigo, nombre=f"Lote {codigo}", superficie_ha=superficie,
+                max_cultivos_principales=10, max_cultivos_secundarios=10,
+                tipo_suelo=suelo, habilitado=True,
+            )
+        cultivo = Cultivo.objects.create(
+            codigo="RGRASS", nombre="R. Grass", tipo=Cultivo.Tipo.OTRO,
+            duracion_dias=120, siembra_inicio=10, siembra_fin=90,
+            no_repetir_sin_intermedio=True,
+        )
+        campania = Campania.objects.create(
+            codigo="C1", orden=1, fecha_inicio="2025-06-01", fecha_fin="2026-05-31",
+        )
+        CompatibilidadCultivoSuelo.objects.create(
+            cultivo=cultivo, tipo_suelo=suelo, compatible=True,
+        )
+        LimiteSuperficieCultivoCampania.objects.create(
+            cultivo=cultivo, campania=campania, min_ha=60, max_ha=60,
+        )
+
+        with self.assertRaisesMessage(ValidationError, "requiere exactamente 60 ha"):
+            solicitar_planificacion(self.user, nombre="Planificación de prueba")
 
 
 class ResultadosPlanificacionTemplateTest(TestCase):

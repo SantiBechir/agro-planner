@@ -288,7 +288,7 @@ class LoteUpdateDirectTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.lote.refresh_from_db()
         self.assertEqual(self.lote.nombre, "Parcela Mixta")
-        self.assertFalse(self.lote.habilitado)
+        self.assertTrue(self.lote.habilitado)
         self.assertEqual(self.lote.superficie_ha, 100)
         self.assertEqual(self.lote.tipo_suelo, self.suelo2)
         self.assertEqual(self.lote.codigo, "J1")

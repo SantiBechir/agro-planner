@@ -56,9 +56,11 @@ class CultivoListDirectTest(TestCase):
         expected_inicio = (base_date + timedelta(days=9)).strftime("%d/%m/%Y")
         expected_fin = (base_date + timedelta(days=89)).strftime("%d/%m/%Y")
 
-        self.assertIn("Suelo S1", html)
+        self.assertIn("Suelo 1", html)
         self.assertTrue("4.5" in html or "4,5" in html, f"Expected 4.5 or 4,5 in html, got: {html}")
-        self.assertIn("Suelo S2", html)
+        self.assertIn("Suelo 2", html)
+        self.assertNotIn("Suelo S1", html)
+        self.assertIn("Período de siembra:", html)
         self.assertTrue("3.2" in html or "3,2" in html, f"Expected 3.2 or 3,2 in html, got: {html}")
         self.assertIn(expected_inicio, html)
         self.assertIn(expected_fin, html)
@@ -182,6 +184,7 @@ class CultivoCreateDirectTest(TestCase):
         # Verify DB entries
         cultivo_obj = Cultivo.objects.get(codigo="GIRASOL HIBRIDO")
         self.assertEqual(cultivo_obj.nombre, "Girasol Hibrido")
+        self.assertEqual(cultivo_obj.creado_por, self.user)
         self.assertEqual(cultivo_obj.tipo, Cultivo.Tipo.PRINCIPAL)
         self.assertEqual(cultivo_obj.duracion_dias, 110)
         self.assertEqual(cultivo_obj.siembra_inicio, 15)

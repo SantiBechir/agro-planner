@@ -88,17 +88,16 @@ def crear_lote(actor, *, nombre, ambientes):
     return lote
 
 
-def actualizar_lote(actor, lote_id, *, nombre, ambientes, habilitado):
+def actualizar_lote(actor, lote_id, *, nombre, ambientes):
     require_editor(actor)
     lote = Lote.objects.get(pk=lote_id)
     nombre = nombre.strip()
     data = _validar_lote(nombre, ambientes, lote_id=lote.pk)
     with transaction.atomic():
         lote.nombre = nombre
-        lote.habilitado = habilitado
         lote.superficie_ha = sum(ha for _, _, ha in data)
         lote.tipo_suelo = max(data, key=lambda item: item[2])[0]
-        lote.save(update_fields=["nombre", "habilitado", "superficie_ha", "tipo_suelo"])
+        lote.save(update_fields=["nombre", "superficie_ha", "tipo_suelo"])
         lote.ambientes.all().delete()
         _guardar_ambientes(lote, data)
     return lote

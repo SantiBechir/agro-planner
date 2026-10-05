@@ -3,7 +3,8 @@ import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db.models import Prefetch
+from django.db.models import Case, IntegerField, Prefetch, Value, When
+from django.db.models.functions import Cast, Substr
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
@@ -21,6 +22,21 @@ def lote_list(
 ):
     lotes = (
         Lote.objects.all()
+        .annotate(
+            codigo_es_numerico=Case(
+                When(codigo__regex=r"^J\d+$", then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            ),
+            codigo_orden=Case(
+                When(
+                    codigo__regex=r"^J\d+$",
+                    then=Cast(Substr("codigo", 2), IntegerField()),
+                ),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+        )
         .select_related("tipo_suelo")
         .prefetch_related("ambientes__tipo_suelo")
         .prefetch_related(
@@ -32,7 +48,7 @@ def lote_list(
                 to_attr="historial_registros",
             )
         )
-        .order_by("codigo")
+        .order_by("-habilitado", "codigo_es_numerico", "codigo_orden", "codigo")
     )
 
     for lote in lotes:
@@ -70,10 +86,16 @@ def lote_list(
         for anio in range(base_year - 1, base_year - 16, -1)
     ]
 
+    cultivos_historial = list(
+        Cultivo.objects.filter(duracion_dias__gt=0).order_by("codigo")
+    )
+    for cultivo in cultivos_historial:
+        cultivo.estacion_historial = historial.estacion_de_cultivo(cultivo).title()
+
     context = {
         "lotes": lotes,
         "tipos_suelo": TipoSuelo.objects.all().order_by("codigo"),
-        "cultivos": Cultivo.objects.all().order_by("codigo"),
+        "cultivos": cultivos_historial,
         "anios_cargables": anios_cargables,
         "create_error": create_error,
         "create_nombre": create_nombre,
@@ -125,7 +147,6 @@ def lote_update(request, pk):
         lote = lotes.actualizar_lote(
             request.user, pk, nombre=(request.POST.get("nombre") or "").strip(),
             ambientes=_ambientes_data(_raw_ambientes(request)),
-            habilitado=request.POST.get("habilitado") == "1",
         )
     except ValidationError as exc:
         messages.error(request, exc.messages[0])

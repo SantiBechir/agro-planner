@@ -4,11 +4,12 @@ import unicodedata
 from datetime import datetime
 from math import isfinite
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
 from core.models import (
-    Campania, CompatibilidadCultivoSuelo, Costo, Cultivo, Lote,
+    AsignacionLoteSlot, Campania, CompatibilidadCultivoSuelo, Costo, Cultivo,
+    HistorialLoteCultivo, Lote,
     RendimientoCultivoSuelo, TipoCosto, TipoSuelo,
 )
 from core.services.authorization import require_editor
@@ -57,6 +58,7 @@ def crear_cultivo(actor, *, nombre, tipo, duracion_dias, siembra_inicio_fecha,
             cultivo = Cultivo.objects.create(
                 codigo=codigo.strip().upper(),
                 nombre=nombre.strip(),
+                creado_por=actor,
                 tipo=tipo,
                 duracion_dias=duracion,
                 siembra_inicio=siembra_inicio,
@@ -134,3 +136,26 @@ def crear_cultivo(actor, *, nombre, tipo, duracion_dias, siembra_inicio_fecha,
     except (TypeError, ValueError) as exc:
         raise ValidationError("Los datos del cultivo no son válidos.") from exc
     return cultivo
+
+
+def eliminar_cultivo(actor, *, cultivo_id):
+    require_editor(actor)
+    with transaction.atomic():
+        cultivo = (
+            Cultivo.objects.select_for_update()
+            .filter(pk=cultivo_id, creado_por=actor)
+            .first()
+        )
+        if cultivo is None:
+            raise PermissionDenied("Solo podés eliminar los cultivos que agregaste.")
+        if (
+            HistorialLoteCultivo.objects.filter(cultivo=cultivo).exists()
+            or AsignacionLoteSlot.objects.filter(cultivo=cultivo).exists()
+        ):
+            raise ValidationError(
+                "No se puede eliminar este cultivo porque figura en el historial "
+                "de un lote o en una planificación guardada."
+            )
+        nombre = cultivo.nombre
+        cultivo.delete()
+    return nombre

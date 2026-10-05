@@ -8,18 +8,21 @@ from core.services import costos
 from core.services.economic_indicators import build_economic_indicators
 
 
-def _filtros_costos(params):
-    selected_tab = params.get("tab", "detalle")
+def _filtros_costos(params, *, default_tab="detalle", saved_comparisons=None):
+    saved_comparisons = saved_comparisons or {}
+    saved_margenes = saved_comparisons.get("margenes", {})
+    saved_indiferencia = saved_comparisons.get("indiferencia", {})
+    selected_tab = params.get("tab", default_tab)
     if selected_tab not in {"margenes", "indiferencia", "detalle"}:
         selected_tab = "detalle"
     selected_tipo = params.get("tipo", "")
     selected_campania = params.get("campania", "")
     selected_cultivo = params.get("cultivo", "")
     selected_suelo = params.get("suelo", "")
-    mb_selected_campanias = params.getlist("mb_campania")
-    mb_selected_suelos = params.getlist("mb_suelo")
-    mb_selected_cultivos = params.getlist("mb_cultivo")
-    mb_cultivo_mode = params.get("mb_cultivo_mode", "selected")
+    mb_selected_campanias = params.getlist("mb_campania") or saved_margenes.get("campanias", [])
+    mb_selected_suelos = params.getlist("mb_suelo") or saved_margenes.get("suelos", [])
+    mb_selected_cultivos = params.getlist("mb_cultivo") or saved_margenes.get("cultivos", [])
+    mb_cultivo_mode = params.get("mb_cultivo_mode", saved_margenes.get("cultivo_mode", "selected"))
     if mb_cultivo_mode not in {"all", "selected"}:
         mb_cultivo_mode = "selected"
     mb_view = params.get("mb_view", "grafico")
@@ -28,10 +31,9 @@ def _filtros_costos(params):
     ri_view = params.get("ri_view", "grafico")
     if ri_view not in {"lista", "grafico"}:
         ri_view = "grafico"
-    ri_selected_campanias = params.getlist("ri_campania")
-    ri_selected_suelos = params.getlist("ri_suelo")
-    ri_selected_cultivos = params.getlist("ri_cultivo")
-    ri_cultivo_mode = params.get("ri_cultivo_mode", "selected")
+    ri_selected_campanias = params.getlist("ri_campania") or saved_indiferencia.get("campanias", [])
+    ri_selected_cultivos = params.getlist("ri_cultivo") or saved_indiferencia.get("cultivos", [])
+    ri_cultivo_mode = params.get("ri_cultivo_mode", saved_indiferencia.get("cultivo_mode", "selected"))
     if ri_cultivo_mode not in {"all", "selected"}:
         ri_cultivo_mode = "selected"
     selected_page = params.get("page", "1")
@@ -49,7 +51,6 @@ def _filtros_costos(params):
         "mb_view": mb_view,
         "ri_view": ri_view,
         "ri_selected_campanias": ri_selected_campanias,
-        "ri_selected_suelos": ri_selected_suelos,
         "ri_selected_cultivos": ri_selected_cultivos,
         "ri_cultivo_mode": ri_cultivo_mode,
         "selected_page": selected_page,
@@ -91,10 +92,12 @@ def _contexto_costos(filtros, cultivo):
         listado["page_obj"], listado["arrendamiento_page_obj"],
         catalogos["campanias"], catalogos["tipos_costo"], costos.anio_base_costos(),
     )
+    indicator_filter_keys = ["selected_campania", "selected_cultivo"]
+    if filtros["selected_tab"] == "margenes":
+        indicator_filter_keys.append("selected_suelo")
     indicadores = economia.filtrar_indicadores(
-        build_economic_indicators(), **{key: filtros[key] for key in (
-            "selected_campania", "selected_cultivo", "selected_suelo",
-        )}
+        build_economic_indicators(),
+        **{key: filtros[key] for key in indicator_filter_keys},
     )
     return {
         **listado,
@@ -103,7 +106,7 @@ def _contexto_costos(filtros, cultivo):
         **economia.preparar_tablas(indicadores),
         **economia.preparar_grafico_indiferencia(indicadores, **{
             key: filtros[key] for key in (
-                "ri_selected_campanias", "ri_selected_suelos", "ri_selected_cultivos", "ri_cultivo_mode",
+                "ri_selected_campanias", "ri_selected_cultivos", "ri_cultivo_mode",
             )
         }),
         "mb_cost_charts": economia.preparar_graficos_margen(indicadores["margins"], **{
@@ -129,7 +132,29 @@ def _contexto_costos(filtros, cultivo):
 
 @login_required(login_url="login")
 def costo_list(request):
-    filtros = _filtros_costos(request.GET)
+    session = getattr(request, "session", None)
+    saved_comparisons = session.get("costos_comparaciones", {}) if session else {}
+    filtros = _filtros_costos(
+        request.GET,
+        default_tab=session.get("costos_ultima_subpestana", "detalle") if session else "detalle",
+        saved_comparisons=saved_comparisons,
+    )
+    if session is not None:
+        session["costos_ultima_subpestana"] = filtros["selected_tab"]
+        if filtros["selected_tab"] == "margenes":
+            saved_comparisons["margenes"] = {
+                "campanias": filtros["mb_selected_campanias"],
+                "suelos": filtros["mb_selected_suelos"],
+                "cultivos": filtros["mb_selected_cultivos"],
+                "cultivo_mode": filtros["mb_cultivo_mode"],
+            }
+        elif filtros["selected_tab"] == "indiferencia":
+            saved_comparisons["indiferencia"] = {
+                "campanias": filtros["ri_selected_campanias"],
+                "cultivos": filtros["ri_selected_cultivos"],
+                "cultivo_mode": filtros["ri_cultivo_mode"],
+            }
+        session["costos_comparaciones"] = saved_comparisons
     cultivo = costos.obtener_cultivo(filtros["selected_cultivo"])
     if request.method == "POST":
         resultado = _actualizar_costos(request, cultivo.pk if cultivo else None)

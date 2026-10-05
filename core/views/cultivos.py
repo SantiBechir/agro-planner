@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 
 from accounts.roles import editor_required
 from core.models import Cultivo, TipoSuelo
-from core.services.cultivos import crear_cultivo
+from core.services.cultivos import crear_cultivo, eliminar_cultivo
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +45,10 @@ def cultivo_list(request, form_data=None, open_modal=False):
         ht_date = base_date + timedelta(days=int(cultivo.siembra_fin) - 1)
         cultivo.siembra_inicio_fecha = st_date.strftime("%d/%m/%Y")
         cultivo.siembra_fin_fecha = ht_date.strftime("%d/%m/%Y")
-        inicio_pct = (int(cultivo.siembra_inicio) / 365) * 100
-        fin_pct = ((int(cultivo.siembra_fin) + 1) / 365) * 100
-        cultivo.siembra_inicio_pct = f"{inicio_pct:.4f}"
-        cultivo.siembra_ancho_pct = f"{fin_pct - inicio_pct:.4f}"
-
         # Rendimientos por tipo de suelo
         cultivo.rendimientos = [
             {
-                "suelo": r.tipo_suelo.codigo,
+                "suelo": r.tipo_suelo.nombre or r.tipo_suelo.codigo,
                 "valor": r.valor
             }
             for r in cultivo.rendimientocultivosuelo_set.all().order_by("tipo_suelo__codigo")
@@ -100,4 +95,17 @@ def cultivo_create(request):
         messages.error(request, "No se pudo crear el cultivo. Intentá nuevamente o contactá al administrador.")
         return cultivo_list(request, form_data=form_data, open_modal=True)
     messages.success(request, f"Cultivo {cultivo.codigo} creado. Completa sus precios y costos antes de habilitarlo.")
+    return cultivo_list(request)
+
+
+@login_required(login_url="login")
+@editor_required
+@require_POST
+def cultivo_delete(request, pk):
+    try:
+        nombre = eliminar_cultivo(request.user, cultivo_id=pk)
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
+    else:
+        messages.success(request, f"Cultivo {nombre} eliminado.")
     return cultivo_list(request)

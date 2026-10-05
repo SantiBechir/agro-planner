@@ -627,7 +627,7 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
         crops[code] = _upsert(
             Cultivo,
             {"codigo": code},
-            {"nombre": code, "tipo": crop_type, **params, "no_repetir_sin_intermedio": code in data.cultivos_no_secuenciales, "habilitado_optimizacion": True},
+            {"nombre": code, "tipo": crop_type, **params, "no_repetir_sin_intermedio": code in data.cultivos_no_secuenciales, "habilitado_optimizacion": True, "creado_por": None},
             stats,
             "Cultivo",
         )
@@ -641,7 +641,10 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
         lots[code] = _upsert(
             Lote,
             {"codigo": code},
-            {"nombre": code, **params, "tipo_suelo": soils[dominant], "habilitado": True},
+            # La habilitación es una decisión manual del usuario, no un dato
+            # del Excel. Al reimportar se deben actualizar los parámetros del
+            # lote, pero conservar si fue desactivado para planificación.
+            {"nombre": code, **params, "tipo_suelo": soils[dominant]},
             stats,
             "Lote",
         )
