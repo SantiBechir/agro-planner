@@ -286,7 +286,7 @@ def run_optimization(planificacion_id):
 
     try:
         # 1. Obtener datos de la base de datos
-        data = build_pyomo_input_data()
+        data = build_pyomo_input_data(planificacion.usuario)
 
         model = build_optimization_model(data)
         tc_dict = data["tc_dict"]
@@ -318,7 +318,7 @@ def run_optimization(planificacion_id):
                 # Guardar asignaciones individuales de lotes y slots
                 for (i_code, j_code, t_code) in model.X:
                     if pyo.value(model.X[i_code, j_code, t_code]) > 0.5:
-                        lote = Lote.objects.get(codigo=j_code)
+                        lote = Lote.objects.get(codigo=j_code, usuario=planificacion.usuario)
                         cultivo = Cultivo.objects.get(codigo=i_code)
                         slot = SlotSiembra.objects.get(codigo=t_code)
 
@@ -368,8 +368,21 @@ def run_optimization(planificacion_id):
                 planificacion.save()
             return True
         else:
-            planificacion.estado = Planificacion.Estado.ERROR
-            planificacion.save()
+            terminacion = results.solver.termination_condition
+            if terminacion == pyo.TerminationCondition.infeasible:
+                planificacion.estado = Planificacion.Estado.INFACTIBLE
+                planificacion.detalle_error = (
+                    "No se encontró una planificación que cumpla todos los límites "
+                    "configurados. Revisá en Cultivos los mínimos y máximos de "
+                    "hectáreas y verificá que sean compatibles con tus lotes habilitados."
+                )
+            else:
+                planificacion.estado = Planificacion.Estado.ERROR
+                planificacion.detalle_error = (
+                    f"El solver no pudo terminar la planificación "
+                    f"(estado: {terminacion})."
+                )
+            planificacion.save(update_fields=["estado", "detalle_error"])
             return False
 
     except Exception as e:

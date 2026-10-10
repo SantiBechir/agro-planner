@@ -92,7 +92,7 @@ def crear_cultivo(actor, *, nombre, tipo, duracion_dias, siembra_inicio_fecha,
                 )
             }
             campanias = list(Campania.objects.order_by("orden"))
-            lotes = list(Lote.objects.order_by("codigo"))
+            lotes = list(Lote.objects.filter(usuario=actor).order_by("codigo"))
             costos = []
 
             for codigo_tipo in ("tf", "scp", "st"):

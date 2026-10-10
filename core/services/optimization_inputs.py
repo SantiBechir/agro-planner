@@ -6,7 +6,6 @@ from core.models import (
     Cultivo,
     HistorialLoteCultivo,
     ImpactoRotacion,
-    LimiteSuperficieCultivoCampania,
     Lote,
     NivelAntiguedad,
     RendimientoCultivoSuelo,
@@ -15,11 +14,12 @@ from core.models import (
     SlotSiembra,
     TipoCosto,
 )
+from core.services.limites import limites_para_usuario
 
 
-def build_pyomo_input_data():
+def build_pyomo_input_data(usuario):
     # ── Conjuntos (Sets) ──────────────────────────────────────────────
-    lotes_habilitados = Lote.objects.filter(habilitado=True)
+    lotes_habilitados = Lote.objects.filter(usuario=usuario, habilitado=True)
     j = list(lotes_habilitados.values_list("codigo", flat=True))
 
     cultivos = Cultivo.objects.filter(habilitado_optimizacion=True)
@@ -98,10 +98,10 @@ def build_pyomo_input_data():
 
     hc_dict = _build_costo_dict("hc", requires_campania=True, requires_lote=False)
     frc_dict = _build_costo_dict(
-        "frc", requires_campania=True, requires_lote=True
+        "frc", requires_campania=True, requires_lote=True, usuario=usuario
     )
     vr_dict = _build_costo_dict(
-        "vr", requires_campania=True, requires_lote=True
+        "vr", requires_campania=True, requires_lote=True, usuario=usuario
     )
     tf_dict = _build_costo_dict("tf", requires_campania=False, requires_lote=False)
     scp_dict = _build_costo_dict(
@@ -145,7 +145,7 @@ def build_pyomo_input_data():
     # model extensions but are excluded from the solver input.
     xh_dict = {}
     for obj in HistorialLoteCultivo.objects.filter(
-        lote__habilitado=True
+        lote__usuario=usuario, lote__habilitado=True
     ).select_related(
         "cultivo", "lote", "campania_historica"
     ):
@@ -191,9 +191,7 @@ def build_pyomo_input_data():
 
     maxha_dict = {}
     minha_dict = {}
-    for limit in LimiteSuperficieCultivoCampania.objects.select_related(
-        "cultivo", "campania"
-    ):
+    for limit in limites_para_usuario(usuario).select_related("cultivo", "campania"):
         key = (limit.cultivo.codigo, limit.campania.codigo)
         maxha_dict[key] = limit.max_ha
         minha_dict[key] = limit.min_ha
@@ -257,10 +255,12 @@ def build_pyomo_input_data():
     }
 
 
-def _build_costo_dict(tipo_codigo, requires_campania, requires_lote):
+def _build_costo_dict(tipo_codigo, requires_campania, requires_lote, *, usuario=None):
     costos = Costo.objects.filter(tipo_costo__codigo=tipo_codigo).select_related(
         "cultivo", "campania", "lote"
     )
+    if requires_lote:
+        costos = costos.filter(lote__usuario=usuario)
     result = {}
     for costo in costos:
         cultivo_code = costo.cultivo.codigo

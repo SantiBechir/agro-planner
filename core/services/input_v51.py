@@ -635,7 +635,7 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
     stats.disabled["Cultivo"] += disabled_crops
 
     lots = {}
-    for code in data.lotes:
+    for code in ():
         params = data.parametros_lote[code]
         dominant = max(data.suelos, key=lambda soil: data.proporciones[(code, soil)])
         lots[code] = _upsert(
@@ -662,7 +662,7 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
                 "Ambiente",
             )
         _delete_queryset(lots[code].ambientes.exclude(tipo_suelo_id__in=imported_soils), stats, "Ambiente")
-    disabled_lots = Lote.objects.exclude(codigo__in=data.lotes).filter(habilitado=True).update(habilitado=False)
+    disabled_lots = 0
     stats.disabled["Lote"] += disabled_lots
 
     historical = {}
@@ -701,6 +701,8 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
 
     desired_cost_ids = []
     for (type_code, crop_code, campaign_code, lot_code), value in data.costos.items():
+        if lot_code:
+            continue
         lookup = {
             "tipo_costo": cost_types[type_code],
             "cultivo": crops[crop_code],
@@ -710,16 +712,16 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
         cost = _upsert(Costo, lookup, {"valor": value, "configurado": True}, stats, "Costo")
         desired_cost_ids.append(cost.pk)
     _delete_queryset(
-        Costo.objects.filter(tipo_costo__codigo__in=[item[0] for item in COST_TYPES]).exclude(pk__in=desired_cost_ids),
+        Costo.objects.filter(tipo_costo__codigo__in=[item[0] for item in COST_TYPES], lote__isnull=True).exclude(pk__in=desired_cost_ids),
         stats,
         "Costo",
     )
 
     desired_limit_ids = []
-    for (crop_code, campaign_code), (minimum, maximum) in data.limites.items():
-        obj = _upsert(LimiteSuperficieCultivoCampania, {"cultivo": crops[crop_code], "campania": campaigns[campaign_code]}, {"min_ha": minimum, "max_ha": maximum}, stats, "LimiteSuperficieCultivoCampania")
+    for crop_code, campaign_code in data.limites:
+        obj = _upsert(LimiteSuperficieCultivoCampania, {"usuario": None, "cultivo": crops[crop_code], "campania": campaigns[campaign_code]}, {"min_ha": 0.0, "max_ha": 500.0}, stats, "LimiteSuperficieCultivoCampania")
         desired_limit_ids.append(obj.pk)
-    _delete_queryset(LimiteSuperficieCultivoCampania.objects.exclude(pk__in=desired_limit_ids), stats, "LimiteSuperficieCultivoCampania")
+    _delete_queryset(LimiteSuperficieCultivoCampania.objects.filter(usuario__isnull=True).exclude(pk__in=desired_limit_ids), stats, "LimiteSuperficieCultivoCampania")
 
     relation_specs = (
         (SetupCultivo, data.setups, "SetupCultivo", lambda a, b, v: ({"cultivo_previo": crops[a], "cultivo_siguiente": crops[b]}, {"dias": v})),
@@ -736,7 +738,7 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
         _delete_queryset(model.objects.exclude(pk__in=ids), stats, label)
 
     history_ids = []
-    for (crop_code, lot_code, historical_code), present in data.historial.items():
+    for (crop_code, lot_code, historical_code), present in ():
         obj = _upsert(
             HistorialLoteCultivo,
             {"cultivo": crops[crop_code], "lote": lots[lot_code], "campania_historica": historical[historical_code]},
@@ -745,5 +747,5 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
             "HistorialLoteCultivo",
         )
         history_ids.append(obj.pk)
-    _delete_queryset(HistorialLoteCultivo.objects.exclude(pk__in=history_ids), stats, "HistorialLoteCultivo")
+    # Los historiales pertenecen a lotes de usuarios y no se reemplazan desde el Excel.
     return stats
