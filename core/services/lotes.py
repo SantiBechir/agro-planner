@@ -10,9 +10,9 @@ from core.models import Ambiente, Lote, TipoSuelo
 from core.services.authorization import require_editor
 
 
-def _next_lote_codigo():
+def _next_lote_codigo(actor):
     max_n = 0
-    for codigo in Lote.objects.values_list("codigo", flat=True):
+    for codigo in Lote.objects.filter(usuario=actor).values_list("codigo", flat=True):
         match = re.fullmatch(r"J(\d+)", codigo or "")
         if match:
             max_n = max(max_n, int(match.group(1)))
@@ -45,13 +45,13 @@ def validar_ambientes(ambientes):
     return data
 
 
-def _validar_lote(nombre, ambientes, *, lote_id=None):
+def _validar_lote(actor, nombre, ambientes, *, lote_id=None):
     # El nombre conserva prioridad sobre los errores de ambientes en el formulario.
     if not nombre:
         raise ValidationError("El nombre del lote es obligatorio.")
     if len(nombre) > 100:
         raise ValidationError("El nombre del lote debe tener hasta 100 caracteres.")
-    existentes = Lote.objects.filter(nombre__iexact=nombre)
+    existentes = Lote.objects.filter(usuario=actor, nombre__iexact=nombre)
     if lote_id is not None:
         existentes = existentes.exclude(pk=lote_id)
     if existentes.exists():
@@ -72,11 +72,11 @@ def _guardar_ambientes(lote, ambientes):
 def crear_lote(actor, *, nombre, ambientes):
     require_editor(actor)
     nombre = nombre.strip()
-    data = _validar_lote(nombre, ambientes)
+    data = _validar_lote(actor, nombre, ambientes)
     try:
         with transaction.atomic():
             lote = Lote.objects.create(
-                codigo=_next_lote_codigo(), nombre=nombre,
+                usuario=actor, codigo=_next_lote_codigo(actor), nombre=nombre,
                 superficie_ha=sum(ha for _, _, ha in data),
                 tipo_suelo=max(data, key=lambda item: item[2])[0],
                 max_cultivos_principales=10, max_cultivos_secundarios=10,
@@ -90,9 +90,9 @@ def crear_lote(actor, *, nombre, ambientes):
 
 def actualizar_lote(actor, lote_id, *, nombre, ambientes):
     require_editor(actor)
-    lote = Lote.objects.get(pk=lote_id)
+    lote = Lote.objects.get(pk=lote_id, usuario=actor)
     nombre = nombre.strip()
-    data = _validar_lote(nombre, ambientes, lote_id=lote.pk)
+    data = _validar_lote(actor, nombre, ambientes, lote_id=lote.pk)
     with transaction.atomic():
         lote.nombre = nombre
         lote.superficie_ha = sum(ha for _, _, ha in data)
@@ -105,7 +105,7 @@ def actualizar_lote(actor, lote_id, *, nombre, ambientes):
 
 def alternar_lote(actor, lote_id):
     require_editor(actor)
-    lote = Lote.objects.get(pk=lote_id)
+    lote = Lote.objects.get(pk=lote_id, usuario=actor)
     lote.habilitado = not lote.habilitado
     lote.save(update_fields=["habilitado"])
     return lote

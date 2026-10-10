@@ -42,7 +42,7 @@ def _parse_rendimiento(raw):
 def cargar_historial(actor, lote_id, *, anio_inicio, cultivo_1_id,
                      rendimiento_1="", cultivo_2_id=None, rendimiento_2=""):
     require_editor(actor)
-    lote = Lote.objects.get(pk=lote_id)
+    lote = Lote.objects.get(pk=lote_id, usuario=actor)
     base_year = CampaniaHistorica.anio_base_actual()
     try:
         anio = int(anio_inicio)
@@ -100,7 +100,7 @@ def cargar_historial(actor, lote_id, *, anio_inicio, cultivo_1_id,
 
 def eliminar_historial(actor, lote_id, *, anio_inicio):
     require_editor(actor)
-    lote = Lote.objects.get(pk=lote_id)
+    lote = Lote.objects.get(pk=lote_id, usuario=actor)
     eliminados, _ = HistorialLoteCultivo.objects.filter(
         lote=lote, campania_historica__anio_inicio=anio_inicio,
     ).delete()

@@ -1,12 +1,4 @@
 <div class="space-y-8 max-w-7xl mx-auto">
-  {% if messages %}
-    {% for message in messages %}
-      <div class="rounded-xl border px-4 py-3 text-sm font-semibold {% if 'error' in message.tags %}border-red-200 bg-red-50 text-red-700{% else %}border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}">
-        {{ message }}
-      </div>
-    {% endfor %}
-  {% endif %}
-
   <!-- Header -->
   <div
     class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0"
@@ -24,6 +16,13 @@
     </div>
   </div>
 
+  {% if messages %}
+    {% for message in messages %}
+      <div class="rounded-xl border px-4 py-3 text-sm font-semibold {% if 'error' in message.tags %}border-red-200 bg-red-50 text-red-700{% else %}border-emerald-200 bg-emerald-50 text-emerald-700{% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
   <!-- Grid de Acción Principal e Indicador de Carga (Light Theme) -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- Panel de control de corrida (Light Card) -->
@@ -34,7 +33,7 @@
         class="absolute top-0 right-0 h-24 w-24 rounded-full bg-emerald-500/5 blur-2xl group-hover:bg-emerald-500/10 transition-all duration-300"
       ></div>
 
-      <h2 class="text-lg font-bold text-[#2f5e31] mb-4">Nueva Planificación</h2>
+            <h2 class="text-lg font-bold text-[#2f5e31] mb-4">Nueva Planificación</h2>
 
       <form
         hx-post="{% url 'ejecutar_optimizacion' %}"

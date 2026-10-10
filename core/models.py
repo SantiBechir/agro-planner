@@ -1,5 +1,5 @@
-from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
 
@@ -86,7 +86,14 @@ class Cultivo(models.Model):
 
 
 class Lote(models.Model):
-    codigo = models.CharField(max_length=50, unique=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="lotes",
+        null=True,
+        blank=True,
+    )
+    codigo = models.CharField(max_length=50)
     nombre = models.CharField(max_length=100)
     superficie_ha = models.FloatField()
     max_cultivos_principales = models.PositiveIntegerField()
@@ -97,8 +104,11 @@ class Lote(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                Lower("nombre"), name="unique_lote_nombre_ci"
-            )
+                fields=["usuario", "codigo"], name="unique_lote_codigo_usuario"
+            ),
+            models.UniqueConstraint(
+                Lower("nombre"), "usuario", name="unique_lote_nombre_ci_usuario"
+            ),
         ]
 
     def __str__(self):
@@ -165,6 +175,15 @@ class Costo(models.Model):
 
 
 class LimiteSuperficieCultivoCampania(models.Model):
+    # Las filas sin usuario son la plantilla global importada desde el Excel.
+    # Cada cuenta recibe una copia editable antes de planificar.
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="limites_superficie",
+        null=True,
+        blank=True,
+    )
     cultivo = models.ForeignKey(
         Cultivo, on_delete=models.CASCADE, related_name="limites_superficie"
     )
@@ -177,8 +196,8 @@ class LimiteSuperficieCultivoCampania(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["cultivo", "campania"],
-                name="unique_limite_cultivo_campania",
+                fields=["usuario", "cultivo", "campania"],
+                name="unique_limite_cultivo_campania_usuario",
             ),
             models.CheckConstraint(
                 check=models.Q(min_ha__gte=0)
