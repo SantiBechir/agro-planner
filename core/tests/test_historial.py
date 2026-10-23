@@ -20,7 +20,7 @@ class LoteHistorialAddTest(TestCase):
         set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
-        self.lote = Lote.objects.create(
+        self.lote = Lote.objects.create(usuario=self.user,
             codigo="J1",
             nombre="Parcela Norte",
             superficie_ha=100,
@@ -103,7 +103,7 @@ class LoteHistorialAddTest(TestCase):
         self.assertEqual(registros.get().rendimiento_kg_ha, 3500)
 
     def test_delete_history_removes_only_selected_lote_and_campaign(self):
-        otra_lote = Lote.objects.create(
+        otra_lote = Lote.objects.create(usuario=self.user,
             codigo="J2", nombre="Otra parcela", superficie_ha=20,
             max_cultivos_principales=10, max_cultivos_secundarios=10,
             tipo_suelo=self.suelo1,
@@ -230,7 +230,7 @@ class LoteListHistorialGroupingTest(TestCase):
         set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
-        self.lote = Lote.objects.create(
+        self.lote = Lote.objects.create(usuario=self.user,
             codigo="J1",
             nombre="Parcela Norte",
             superficie_ha=100,

@@ -1,3 +1,6 @@
+from .support import test_usuario
+from core.models import ConfiguracionCultivoUsuario
+from core.services.input_v51 import initialize_model_v51
 from django.test import TestCase
 from django.conf import settings
 from django.core.management.base import CommandError
@@ -14,13 +17,14 @@ class CargarInputHistorialMappingTest(TestCase):
     def test_input_v51_imports_the_complete_snapshot(self):
         input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
 
-        CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path))
+        initialize_model_v51(read_and_validate_input_v51(input_path))
+        CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path), usuario=test_usuario().email)
 
         self.assertEqual(TipoSuelo.objects.get(codigo="S1").nombre, "Molisol")
         self.assertEqual(TipoSuelo.objects.get(codigo="S2").nombre, "Alfisol")
         self.assertEqual(TipoSuelo.objects.get(codigo="S3").nombre, "Vertisol")
         self.assertEqual(Lote.objects.filter(habilitado=True).count(), 10)
-        self.assertEqual(Cultivo.objects.filter(habilitado_optimizacion=True).count(), 20)
+        self.assertEqual(ConfiguracionCultivoUsuario.objects.filter(usuario=test_usuario(), habilitado_optimizacion=True).count(), 20)
         self.assertEqual(Campania.objects.count(), 3)
         self.assertEqual(LimiteSuperficieCultivoCampania.objects.count(), 60)
         self.assertEqual(TipoCosto.objects.count(), 15)
@@ -68,7 +72,8 @@ class CargarInputHistorialMappingTest(TestCase):
     def test_import_is_idempotent(self):
         input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
         command = CargarInputCommand(stdout=StringIO())
-        command.handle(archivo=str(input_path))
+        initialize_model_v51(read_and_validate_input_v51(input_path))
+        command.handle(archivo=str(input_path), usuario=test_usuario().email)
         first_counts = (
             Cultivo.objects.count(),
             Lote.objects.count(),
@@ -77,7 +82,8 @@ class CargarInputHistorialMappingTest(TestCase):
             LimiteSuperficieCultivoCampania.objects.count(),
         )
 
-        command.handle(archivo=str(input_path))
+        initialize_model_v51(read_and_validate_input_v51(input_path))
+        command.handle(archivo=str(input_path), usuario=test_usuario().email)
 
         self.assertEqual(
             first_counts,
@@ -93,13 +99,15 @@ class CargarInputHistorialMappingTest(TestCase):
     def test_reimport_preserves_manual_lot_disablement(self):
         input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
         command = CargarInputCommand(stdout=StringIO())
-        command.handle(archivo=str(input_path))
+        initialize_model_v51(read_and_validate_input_v51(input_path))
+        command.handle(archivo=str(input_path), usuario=test_usuario().email)
 
         lote = Lote.objects.get(codigo="J1")
         lote.habilitado = False
         lote.save(update_fields=["habilitado"])
 
-        command.handle(archivo=str(input_path))
+        initialize_model_v51(read_and_validate_input_v51(input_path))
+        command.handle(archivo=str(input_path), usuario=test_usuario().email)
 
         lote.refresh_from_db()
         self.assertFalse(lote.habilitado)
@@ -115,7 +123,7 @@ class CargarInputHistorialMappingTest(TestCase):
             siembra_inicio=1,
             siembra_fin=30,
         )
-        stale_lot = Lote.objects.create(
+        stale_lot = Lote.objects.create(usuario=test_usuario(),
             codigo="J_OLD",
             nombre="Lote anterior",
             superficie_ha=20,
@@ -126,29 +134,33 @@ class CargarInputHistorialMappingTest(TestCase):
         legacy_type = TipoCosto.objects.create(
             codigo="sc", descripcion="Costo agregado", unidad="USD/ha"
         )
-        Costo.objects.create(
+        Costo.objects.create(usuario=test_usuario(),
             cultivo=stale_crop, tipo_costo=legacy_type, valor=100
         )
 
-        CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path))
+        initialize_model_v51(read_and_validate_input_v51(input_path))
+        CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path), usuario=test_usuario().email)
 
         stale_crop.refresh_from_db()
         stale_lot.refresh_from_db()
-        self.assertFalse(stale_crop.habilitado_optimizacion)
+        self.assertTrue(stale_crop.habilitado_optimizacion)
+        self.assertFalse(ConfiguracionCultivoUsuario.objects.filter(usuario=test_usuario(), cultivo=stale_crop, habilitado_optimizacion=True).exists())
         self.assertFalse(stale_lot.habilitado)
-        self.assertFalse(TipoCosto.objects.filter(codigo="sc").exists())
+        self.assertTrue(TipoCosto.objects.filter(codigo="sc").exists())
+        self.assertFalse(Costo.objects.filter(usuario=test_usuario(), tipo_costo=legacy_type).exists())
 
     @patch("core.management.commands.cargar_input.persist_input_v51")
     def test_import_rolls_back_if_persistence_fails(self, persist_mock):
         input_path = settings.BASE_DIR / "docs" / "Input v5.1.xlsx"
 
-        def fail_after_write(data):
+        def fail_after_write(data, usuario):
             TipoSuelo.objects.create(codigo="ROLLBACK", nombre="Temporal")
             raise RuntimeError("fallo simulado")
 
         persist_mock.side_effect = fail_after_write
         with self.assertRaises(CommandError):
-            CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path))
+            initialize_model_v51(read_and_validate_input_v51(input_path))
+            CargarInputCommand(stdout=StringIO()).handle(archivo=str(input_path), usuario=test_usuario().email)
 
         self.assertFalse(TipoSuelo.objects.filter(codigo="ROLLBACK").exists())
 

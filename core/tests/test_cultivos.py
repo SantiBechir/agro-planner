@@ -1,3 +1,4 @@
+from core.models import ConfiguracionCultivoUsuario
 from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from core.views import cultivo_list, cultivo_create
@@ -41,6 +42,7 @@ class CultivoListDirectTest(TestCase):
         RendimientoCultivoSuelo.objects.create(cultivo=self.cultivo, tipo_suelo=self.suelo2, valor=3.2)
 
     def test_cultivo_list_direct_call(self):
+        ConfiguracionCultivoUsuario.objects.create(usuario=self.user, cultivo=self.cultivo, habilitado_optimizacion=True)
         request = self.factory.get('/cultivos/')
         request.user = self.user
 
@@ -86,7 +88,7 @@ class CultivoListDirectTest(TestCase):
 
     def test_economic_status_uses_pending_cost_count(self):
         tipo = TipoCosto.objects.create(codigo="sc", descripcion="Costo")
-        Costo.objects.create(
+        Costo.objects.create(usuario=self.user,
             cultivo=self.cultivo,
             tipo_costo=tipo,
             valor=0,
@@ -133,7 +135,7 @@ class CultivoCreateDirectTest(TestCase):
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Suelo 1")
         self.campania1 = Campania.objects.create(codigo="C1", orden=1)
         self.campania2 = Campania.objects.create(codigo="C2", orden=2)
-        Lote.objects.create(
+        Lote.objects.create(usuario=self.user,
             codigo="L1",
             nombre="Lote 1",
             superficie_ha=100,
@@ -141,7 +143,7 @@ class CultivoCreateDirectTest(TestCase):
             max_cultivos_secundarios=1,
             tipo_suelo=self.suelo1,
         )
-        Lote.objects.create(
+        Lote.objects.create(usuario=self.user,
             codigo="L2",
             nombre="Lote 2",
             superficie_ha=80,

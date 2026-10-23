@@ -9,7 +9,7 @@ from .service_support import ServiceTestCase
 
 class CultivoServiceTest(ServiceTestCase):
     def test_failed_cost_creation_rolls_back_all_agronomic_data(self):
-        with patch("core.services.cultivos.Costo.objects.bulk_create", side_effect=RuntimeError("fallo")):
+        with patch("core.services.costos.Costo.objects.get_or_create", side_effect=RuntimeError("fallo")):
             with self.assertRaises(RuntimeError):
                 crear_cultivo(self.editor, **self.datos_cultivo())
         self.assertEqual(Cultivo.objects.count(), 1)

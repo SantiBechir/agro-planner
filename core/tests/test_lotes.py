@@ -36,7 +36,7 @@ class LoteCreateDirectTest(TestCase):
             "tipo_suelo": self.suelo1,
         }
         defaults.update(kwargs)
-        return Lote.objects.create(codigo=codigo, nombre=nombre, **defaults)
+        return Lote.objects.create(usuario=self.user, codigo=codigo, nombre=nombre, **defaults)
 
     def test_lote_create_and_list(self):
         data = {
@@ -223,7 +223,7 @@ class LoteToggleTest(TestCase):
         set_functional_role(self.user, EDITOR_ROLE)
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
-        self.lote = Lote.objects.create(
+        self.lote = Lote.objects.create(usuario=self.user,
             codigo="J1",
             nombre="Parcela Norte",
             superficie_ha=100,
@@ -263,7 +263,7 @@ class LoteUpdateDirectTest(TestCase):
         self.factory = RequestFactory()
         self.suelo1 = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
         self.suelo2 = TipoSuelo.objects.create(codigo="S2", nombre="Alfisol")
-        self.lote = Lote.objects.create(
+        self.lote = Lote.objects.create(usuario=self.user,
             codigo="J1", nombre="Parcela Norte", superficie_ha=100,
             max_cultivos_principales=7, max_cultivos_secundarios=4,
             tipo_suelo=self.suelo1, habilitado=True,
@@ -304,7 +304,7 @@ class LoteUpdateDirectTest(TestCase):
         self.lote.refresh_from_db()
         self.assertEqual(self.lote.superficie_ha, 80)
 
-        otro = Lote.objects.create(
+        otro = Lote.objects.create(usuario=self.user,
             codigo="J2", nombre="Otra parcela", superficie_ha=20,
             max_cultivos_principales=10, max_cultivos_secundarios=10,
             tipo_suelo=self.suelo2,

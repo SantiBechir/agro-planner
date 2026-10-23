@@ -1,3 +1,4 @@
+from core.models import ConfiguracionCultivoUsuario
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
@@ -10,7 +11,7 @@ from .service_support import ServiceTestCase
 class CostoServiceTest(ServiceTestCase):
     def otro_costo(self):
         tipo = TipoCosto.objects.create(codigo="hc", descripcion="Cosecha")
-        return Costo.objects.create(
+        return Costo.objects.create(usuario=self.editor,
             cultivo=self.cultivo, tipo_costo=tipo, campania=self.campania,
             valor=50, configurado=False,
         )
@@ -44,7 +45,8 @@ class CostoServiceTest(ServiceTestCase):
         self.costo.refresh_from_db()
         self.cultivo.refresh_from_db()
         self.assertTrue(self.costo.configurado)
-        self.assertTrue(self.cultivo.habilitado_optimizacion)
+        self.assertTrue(ConfiguracionCultivoUsuario.objects.get(usuario=self.editor, cultivo=self.cultivo).habilitado_optimizacion)
+        self.assertFalse(self.cultivo.habilitado_optimizacion)
 
     def test_missing_cost_is_ignored(self):
         result = actualizar_costos(self.editor, {self.costo.pk + 1000: 200})
@@ -52,7 +54,7 @@ class CostoServiceTest(ServiceTestCase):
         self.assertEqual(Costo.objects.count(), 1)
 
     def test_failure_enabling_crop_rolls_back_cost_changes(self):
-        with patch("core.services.costos.Cultivo.save", side_effect=RuntimeError("fallo")):
+        with patch("core.services.costos.ConfiguracionCultivoUsuario.save", side_effect=RuntimeError("fallo")):
             with self.assertRaises(RuntimeError):
                 actualizar_costos(self.editor, {self.costo.pk: 200}, cultivo_id=self.cultivo.pk, habilitar=True)
         self.costo.refresh_from_db()

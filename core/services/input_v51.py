@@ -17,6 +17,7 @@ from core.models import (
     CampaniaHistorica,
     CompatibilidadCultivoSuelo,
     Costo,
+    ConfiguracionCultivoUsuario,
     Cultivo,
     HistorialLoteCultivo,
     ImpactoRotacion,
@@ -30,6 +31,10 @@ from core.models import (
     TipoCosto,
     TipoSuelo,
 )
+from django.db import transaction
+from django.contrib.auth import get_user_model
+
+from core.services.authorization import require_authenticated
 from core.services.costos import COMPONENTES_SIEMBRA, calcular_costo_siembra
 
 
@@ -104,6 +109,8 @@ class ImportStats:
     unchanged: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     disabled: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     deleted: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+
+    warnings: list[str] = field(default_factory=list)
 
     def lines(self):
         names = sorted(
@@ -595,58 +602,162 @@ def _delete_queryset(queryset, stats: ImportStats, label: str):
         stats.deleted[label] += count
 
 
-def persist_input_v51(data: InputV51Data) -> ImportStats:
-    """Reconcilia la base con el snapshot. Debe invocarse dentro de atomic()."""
-    stats = ImportStats()
-    soils = {
-        code: _upsert(TipoSuelo, {"codigo": code}, {"nombre": SOIL_NAMES.get(code, code)}, stats, "TipoSuelo")
-        for code in data.suelos
-    }
+def _global_specs(data):
+    for code in data.suelos:
+        yield TipoSuelo, {"codigo": code}, {"nombre": SOIL_NAMES.get(code, code)}
     campaigns = {}
     for index, code in enumerate(data.campanias):
-        start_year = data.fecha_base.year + index
-        campaigns[code] = _upsert(
-            Campania,
-            {"codigo": code},
-            {"orden": index + 1, "fecha_inicio": date(start_year, 6, 1), "fecha_fin": date(start_year + 1, 5, 31)},
-            stats,
-            "Campania",
-        )
+        year = data.fecha_base.year + index
+        yield Campania, {"codigo": code}, {
+            "orden": index + 1, "fecha_inicio": date(year, 6, 1),
+            "fecha_fin": date(year + 1, 5, 31),
+        }
+        campaigns[code] = Campania.objects.get(codigo=code)
     slots_per_campaign = len(data.slots) // len(data.campanias)
     for index, code in enumerate(data.slots):
-        campaign = campaigns[data.campanias[index // slots_per_campaign]]
-        _upsert(SlotSiembra, {"codigo": code}, {"orden": index + 1, "campania": campaign}, stats, "SlotSiembra")
-
+        yield SlotSiembra, {"codigo": code}, {
+            "orden": index + 1,
+            "campania": campaigns[data.campanias[index // slots_per_campaign]],
+        }
     for index, code in enumerate(data.niveles):
-        _upsert(NivelAntiguedad, {"codigo": code}, {"orden": index + 1, "lag": index, "alfa": data.alfas[code]}, stats, "NivelAntiguedad")
-
-    crops = {}
+        yield NivelAntiguedad, {"codigo": code}, {
+            "orden": index + 1, "lag": index, "alfa": data.alfas[code],
+        }
     for code in data.cultivos:
-        params = data.parametros_cultivo[code]
-        crop_type = Cultivo.Tipo.PRINCIPAL if code in data.cultivos_principales else Cultivo.Tipo.SECUNDARIO if code in data.cultivos_secundarios else Cultivo.Tipo.OTRO
-        crops[code] = _upsert(
-            Cultivo,
-            {"codigo": code},
-            {"nombre": code, "tipo": crop_type, **params, "no_repetir_sin_intermedio": code in data.cultivos_no_secuenciales, "habilitado_optimizacion": True, "creado_por": None},
-            stats,
-            "Cultivo",
-        )
-    disabled_crops = Cultivo.objects.exclude(codigo__in=data.cultivos).filter(habilitado_optimizacion=True).update(habilitado_optimizacion=False)
-    stats.disabled["Cultivo"] += disabled_crops
+        tipo = (Cultivo.Tipo.PRINCIPAL if code in data.cultivos_principales
+                else Cultivo.Tipo.SECUNDARIO if code in data.cultivos_secundarios
+                else Cultivo.Tipo.OTRO)
+        yield Cultivo, {"codigo": code}, {
+            "nombre": code, "tipo": tipo, **data.parametros_cultivo[code],
+            "no_repetir_sin_intermedio": code in data.cultivos_no_secuenciales,
+        }
+    crops = {obj.codigo: obj for obj in Cultivo.objects.filter(codigo__in=data.cultivos)}
+    soils = {obj.codigo: obj for obj in TipoSuelo.objects.filter(codigo__in=data.suelos)}
+    for code in data.campanias_historicas:
+        year = data.fecha_base.year - int(code.removeprefix("CH"))
+        yield CampaniaHistorica, {"anio_inicio": year}, {"codigo": code}
+    for code, description, unit, percentage in COST_TYPES:
+        yield TipoCosto, {"codigo": code}, {
+            "descripcion": description, "unidad": unit, "es_porcentual": percentage,
+        }
+    relations = (
+        (SetupCultivo, data.setups, lambda a, b: {"cultivo_previo": crops[a], "cultivo_siguiente": crops[b]}, "dias"),
+        (SecuenciaPermitida, data.secuencias, lambda a, b: {"cultivo_previo": crops[a], "cultivo_siguiente": crops[b]}, "permitido"),
+        (CompatibilidadCultivoSuelo, data.compatibilidades, lambda a, b: {"cultivo": crops[a], "tipo_suelo": soils[b]}, "compatible"),
+        (RendimientoCultivoSuelo, data.rendimientos, lambda a, b: {"cultivo": crops[b], "tipo_suelo": soils[a]}, "valor"),
+        (ImpactoRotacion, data.rotaciones, lambda a, b: {"cultivo_previo": crops[a], "cultivo_actual": crops[b]}, "valor"),
+    )
+    for model, values, lookup, field_name in relations:
+        for (a, b), value in values.items():
+            yield model, lookup(a, b), {field_name: value}
 
+
+def _same_value(actual, expected):
+    if isinstance(expected, float):
+        return actual is not None and math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-9)
+    return actual == expected
+
+
+def _record_key(model, fields, values):
+    """Claves con IDs, sin consultas implícitas al resolver relaciones."""
+    if isinstance(values, dict):
+        return tuple(getattr(values[field], "pk", values[field]) for field in fields)
+    return tuple(
+        getattr(values, field + "_id" if model._meta.get_field(field).is_relation else field)
+        for field in fields
+    )
+
+
+def _check_model(data, stats, *, initialize=False):
+    caches = {}
+    for model, lookup, defaults in _global_specs(data):
+        fields = tuple(lookup)
+        cache_key = (model, fields)
+        if cache_key not in caches:
+            caches[cache_key] = {
+                _record_key(model, fields, obj): obj for obj in model.objects.all()
+            }
+        cache = caches[cache_key]
+        key = _record_key(model, fields, lookup)
+        obj = cache.get(key)
+        if obj is None:
+            if not initialize:
+                raise InputValidationError(
+                    f"Falta {model.__name__} {lookup}. Ejecutá cargar_modelo primero."
+                )
+            cache[key] = model.objects.create(**lookup, **defaults)
+            stats.created[model.__name__] += 1
+            continue
+        differences = []
+        for field, expected in defaults.items():
+            actual = _record_key(model, (field,), obj)[0]
+            if not _same_value(actual, getattr(expected, "pk", expected)):
+                differences.append(field)
+        if differences:
+            message = f"{model.__name__} {lookup}: diferencias en {', '.join(differences)}."
+            if model is Cultivo:
+                stats.warnings.append(message + " Se conserva la ficha compartida.")
+            else:
+                raise InputValidationError(message + " Se conserva el modelo instalado.")
+        stats.unchanged[model.__name__] += 1
+
+
+def _persist_owned_rows(model, usuario, records, stats, label, *, owner_lookup="usuario"):
+    """Reconcilia en lotes filas validadas de una sola cuenta, incluida su limpieza."""
+    scope = model.objects.filter(**{owner_lookup: usuario})
+    if not records:
+        _delete_queryset(scope, stats, label)
+        return
+    key_fields = tuple(records[0][0])
+    update_fields = tuple(records[0][1])
+    existing = {_record_key(model, key_fields, obj): obj for obj in scope}
+    created, updated, desired = [], [], []
+    for lookup, defaults in records:
+        obj = existing.get(_record_key(model, key_fields, lookup))
+        if obj is None:
+            obj = model(**lookup, **defaults)
+            created.append(obj)
+        elif any(not _same(getattr(obj, field), value) for field, value in defaults.items()):
+            for field, value in defaults.items():
+                setattr(obj, field, value)
+            updated.append(obj)
+        else:
+            stats.unchanged[label] += 1
+        desired.append(obj)
+    model.objects.bulk_create(created, batch_size=500)
+    if updated:
+        model.objects.bulk_update(updated, update_fields, batch_size=500)
+    stats.created[label] += len(created)
+    stats.updated[label] += len(updated)
+    _delete_queryset(scope.exclude(pk__in=[obj.pk for obj in desired]), stats, label)
+
+
+@transaction.atomic
+def initialize_model_v51(data):
+    """Crea referencias faltantes; nunca reemplaza las reglas instaladas."""
+    stats = ImportStats()
+    _check_model(data, stats, initialize=True)
+    return stats
+
+
+@transaction.atomic
+def persist_input_v51(data: InputV51Data, usuario) -> ImportStats:
+    """Reconcilia exclusivamente el snapshot privado de una cuenta existente."""
+    require_authenticated(usuario)
+    # Serializa importaciones concurrentes de la misma cuenta.
+    get_user_model().objects.select_for_update().get(pk=usuario.pk)
+    stats = ImportStats()
+    _check_model(data, stats)
+    soils = {obj.codigo: obj for obj in TipoSuelo.objects.filter(codigo__in=data.suelos)}
+    crops = {obj.codigo: obj for obj in Cultivo.objects.filter(codigo__in=data.cultivos)}
+    campaigns = {obj.codigo: obj for obj in Campania.objects.filter(codigo__in=data.campanias)}
     lots = {}
     for code in data.lotes:
         params = data.parametros_lote[code]
         dominant = max(data.suelos, key=lambda soil: data.proporciones[(code, soil)])
         lots[code] = _upsert(
-            Lote,
-            {"codigo": code},
-            # La habilitación es una decisión manual del usuario, no un dato
-            # del Excel. Al reimportar se deben actualizar los parámetros del
-            # lote, pero conservar si fue desactivado para planificación.
-            {"nombre": code, **params, "tipo_suelo": soils[dominant]},
-            stats,
-            "Lote",
+            Lote, {"usuario": usuario, "codigo": code},
+            {"nombre": code, **params, "tipo_suelo": soils[dominant]}, stats, "Lote",
         )
         imported_soils = []
         for soil_code in data.suelos:
@@ -654,96 +765,40 @@ def persist_input_v51(data: InputV51Data) -> ImportStats:
             if proportion <= 0:
                 continue
             imported_soils.append(soils[soil_code].pk)
-            _upsert(
-                Ambiente,
-                {"lote": lots[code], "tipo_suelo": soils[soil_code]},
-                {"superficie_ha": params["superficie_ha"] * proportion, "rendimiento_esperado": data.productividades[(code, soil_code)]},
-                stats,
-                "Ambiente",
-            )
+            _upsert(Ambiente, {"lote": lots[code], "tipo_suelo": soils[soil_code]}, {
+                "superficie_ha": params["superficie_ha"] * proportion,
+                "rendimiento_esperado": data.productividades[(code, soil_code)],
+            }, stats, "Ambiente")
         _delete_queryset(lots[code].ambientes.exclude(tipo_suelo_id__in=imported_soils), stats, "Ambiente")
-    disabled_lots = Lote.objects.exclude(codigo__in=data.lotes).filter(habilitado=True).update(habilitado=False)
-    stats.disabled["Lote"] += disabled_lots
-
-    historical = {}
-    for code in data.campanias_historicas:
-        lag = int(code.removeprefix("CH"))
-        year = data.fecha_base.year - lag
-        obj = CampaniaHistorica.objects.filter(codigo=code).first()
-        if obj:
-            if obj.anio_inicio != year:
-                conflict = CampaniaHistorica.objects.filter(anio_inicio=year).exclude(pk=obj.pk).first()
-                if conflict:
-                    conflict.codigo = f"CH_{conflict.anio_inicio}_{conflict.pk}"
-                    conflict.save(update_fields=["codigo"])
-                obj.anio_inicio = year
-                obj.save(update_fields=["anio_inicio"])
-                stats.updated["CampaniaHistorica"] += 1
-            else:
-                stats.unchanged["CampaniaHistorica"] += 1
-            historical[code] = obj
-        else:
-            obj_with_year = CampaniaHistorica.objects.filter(anio_inicio=year).first()
-            if obj_with_year:
-                obj_with_year.codigo = code
-                obj_with_year.save(update_fields=["codigo"])
-                stats.updated["CampaniaHistorica"] += 1
-                historical[code] = obj_with_year
-            else:
-                historical[code] = CampaniaHistorica.objects.create(codigo=code, anio_inicio=year)
-                stats.created["CampaniaHistorica"] += 1
-
-    cost_types = {}
-    for code, description, unit, percentage in COST_TYPES:
-        cost_types[code] = _upsert(TipoCosto, {"codigo": code}, {"descripcion": description, "unidad": unit, "es_porcentual": percentage}, stats, "TipoCosto")
-    _delete_queryset(Costo.objects.filter(tipo_costo__codigo="sc"), stats, "Costo")
-    _delete_queryset(TipoCosto.objects.filter(codigo="sc"), stats, "TipoCosto")
-
-    desired_cost_ids = []
+    stats.disabled["Lote"] += Lote.objects.filter(usuario=usuario, habilitado=True).exclude(codigo__in=data.lotes).update(habilitado=False)
+    for crop in crops.values():
+        _upsert(ConfiguracionCultivoUsuario, {"usuario": usuario, "cultivo": crop},
+                {"habilitado_optimizacion": True}, stats, "ConfiguracionCultivoUsuario")
+    ConfiguracionCultivoUsuario.objects.filter(usuario=usuario).exclude(cultivo__codigo__in=data.cultivos).update(habilitado_optimizacion=False)
+    cost_types = {obj.codigo: obj for obj in TipoCosto.objects.filter(codigo__in=[item[0] for item in COST_TYPES])}
+    costs = []
     for (type_code, crop_code, campaign_code, lot_code), value in data.costos.items():
-        lookup = {
-            "tipo_costo": cost_types[type_code],
-            "cultivo": crops[crop_code],
+        costs.append(({
+            "usuario": usuario, "tipo_costo": cost_types[type_code], "cultivo": crops[crop_code],
             "campania": campaigns[campaign_code] if campaign_code else None,
             "lote": lots[lot_code] if lot_code else None,
-        }
-        cost = _upsert(Costo, lookup, {"valor": value, "configurado": True}, stats, "Costo")
-        desired_cost_ids.append(cost.pk)
-    _delete_queryset(
-        Costo.objects.filter(tipo_costo__codigo__in=[item[0] for item in COST_TYPES]).exclude(pk__in=desired_cost_ids),
-        stats,
-        "Costo",
-    )
-
-    desired_limit_ids = []
-    for (crop_code, campaign_code), (minimum, maximum) in data.limites.items():
-        obj = _upsert(LimiteSuperficieCultivoCampania, {"cultivo": crops[crop_code], "campania": campaigns[campaign_code]}, {"min_ha": minimum, "max_ha": maximum}, stats, "LimiteSuperficieCultivoCampania")
-        desired_limit_ids.append(obj.pk)
-    _delete_queryset(LimiteSuperficieCultivoCampania.objects.exclude(pk__in=desired_limit_ids), stats, "LimiteSuperficieCultivoCampania")
-
-    relation_specs = (
-        (SetupCultivo, data.setups, "SetupCultivo", lambda a, b, v: ({"cultivo_previo": crops[a], "cultivo_siguiente": crops[b]}, {"dias": v})),
-        (SecuenciaPermitida, data.secuencias, "SecuenciaPermitida", lambda a, b, v: ({"cultivo_previo": crops[a], "cultivo_siguiente": crops[b]}, {"permitido": v})),
-        (CompatibilidadCultivoSuelo, data.compatibilidades, "CompatibilidadCultivoSuelo", lambda a, b, v: ({"cultivo": crops[a], "tipo_suelo": soils[b]}, {"compatible": v})),
-        (RendimientoCultivoSuelo, data.rendimientos, "RendimientoCultivoSuelo", lambda a, b, v: ({"tipo_suelo": soils[a], "cultivo": crops[b]}, {"valor": v})),
-        (ImpactoRotacion, data.rotaciones, "ImpactoRotacion", lambda a, b, v: ({"cultivo_previo": crops[a], "cultivo_actual": crops[b]}, {"valor": v})),
-    )
-    for model, values, label, mapping in relation_specs:
-        ids = []
-        for (first, second), value in values.items():
-            lookup, defaults = mapping(first, second, value)
-            ids.append(_upsert(model, lookup, defaults, stats, label).pk)
-        _delete_queryset(model.objects.exclude(pk__in=ids), stats, label)
-
-    history_ids = []
-    for (crop_code, lot_code, historical_code), present in data.historial.items():
-        obj = _upsert(
-            HistorialLoteCultivo,
-            {"cultivo": crops[crop_code], "lote": lots[lot_code], "campania_historica": historical[historical_code]},
-            {"presente": present},
-            stats,
-            "HistorialLoteCultivo",
-        )
-        history_ids.append(obj.pk)
-    _delete_queryset(HistorialLoteCultivo.objects.exclude(pk__in=history_ids), stats, "HistorialLoteCultivo")
+        }, {"valor": value, "configurado": True}))
+    _persist_owned_rows(Costo, usuario, costs, stats, "Costo")
+    limits = [({
+        "usuario": usuario, "cultivo": crops[crop_code], "campania": campaigns[campaign_code],
+    }, {"min_ha": minimum, "max_ha": maximum})
+        for (crop_code, campaign_code), (minimum, maximum) in data.limites.items()
+    ]
+    _persist_owned_rows(LimiteSuperficieCultivoCampania, usuario, limits, stats, "LimiteSuperficieCultivoCampania")
+    historical = {
+        code: CampaniaHistorica.objects.get(anio_inicio=data.fecha_base.year - int(code.removeprefix("CH")))
+        for code in data.campanias_historicas
+    }
+    history = [({
+        "cultivo": crops[crop_code], "lote": lots[lot_code],
+        "campania_historica": historical[historical_code],
+    }, {"presente": present})
+        for (crop_code, lot_code, historical_code), present in data.historial.items()
+    ]
+    _persist_owned_rows(HistorialLoteCultivo, usuario, history, stats, "HistorialLoteCultivo", owner_lookup="lote__usuario")
     return stats
