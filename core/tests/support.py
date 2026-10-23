@@ -16,3 +16,10 @@ class RecordingMessages:
 
     def text(self):
         return " | ".join(str(message) for _, message in self.recorded)
+
+
+def test_usuario():
+    from django.contrib.auth import get_user_model
+    return get_user_model().objects.get_or_create(
+        email="inputs@test.local", defaults={"first_name": "Inputs", "last_name": "Test"},
+    )[0]

@@ -15,14 +15,19 @@ from core.models import (
     TipoCosto,
 )
 from core.services.limites import limites_para_usuario
+from core.services.authorization import require_authenticated
 
 
 def build_pyomo_input_data(usuario):
+    require_authenticated(usuario)
     # ── Conjuntos (Sets) ──────────────────────────────────────────────
     lotes_habilitados = Lote.objects.filter(usuario=usuario, habilitado=True)
     j = list(lotes_habilitados.values_list("codigo", flat=True))
 
-    cultivos = Cultivo.objects.filter(habilitado_optimizacion=True)
+    cultivos = Cultivo.objects.filter(
+        configuraciones_usuario__usuario=usuario,
+        configuraciones_usuario__habilitado_optimizacion=True,
+    )
     i = list(cultivos.values_list("codigo", flat=True).order_by("pk"))
 
     i_p = list(
@@ -79,12 +84,12 @@ def build_pyomo_input_data(usuario):
     st_end = {cult.codigo: cult.siembra_fin for cult in cultivos}
 
     # ── Costos ────────────────────────────────────────────────────────
-    fsp_dict = _build_costo_dict("fsp", requires_campania=True, requires_lote=False)
+    fsp_dict = _build_costo_dict("fsp", requires_campania=True, requires_lote=False, usuario=usuario)
 
     from core.services.costos import COMPONENTES_SIEMBRA
 
     component_dicts = [
-        _build_costo_dict(code, requires_campania=True, requires_lote=False)
+        _build_costo_dict(code, requires_campania=True, requires_lote=False, usuario=usuario)
         for code in COMPONENTES_SIEMBRA
     ]
     sc_dict = {
@@ -96,24 +101,24 @@ def build_pyomo_input_data(usuario):
         for campania in c
     }
 
-    hc_dict = _build_costo_dict("hc", requires_campania=True, requires_lote=False)
+    hc_dict = _build_costo_dict("hc", requires_campania=True, requires_lote=False, usuario=usuario)
     frc_dict = _build_costo_dict(
         "frc", requires_campania=True, requires_lote=True, usuario=usuario
     )
     vr_dict = _build_costo_dict(
         "vr", requires_campania=True, requires_lote=True, usuario=usuario
     )
-    tf_dict = _build_costo_dict("tf", requires_campania=False, requires_lote=False)
+    tf_dict = _build_costo_dict("tf", requires_campania=False, requires_lote=False, usuario=usuario)
     scp_dict = _build_costo_dict(
-        "scp", requires_campania=False, requires_lote=False
+        "scp", requires_campania=False, requires_lote=False, usuario=usuario
     )
-    cp_dict = _build_costo_dict("cp", requires_campania=True, requires_lote=False)
-    st_dict = _build_costo_dict("st", requires_campania=False, requires_lote=False)
+    cp_dict = _build_costo_dict("cp", requires_campania=True, requires_lote=False, usuario=usuario)
+    st_dict = _build_costo_dict("st", requires_campania=False, requires_lote=False, usuario=usuario)
     cst_dict = _build_costo_dict(
-        "cst", requires_campania=True, requires_lote=False
+        "cst", requires_campania=True, requires_lote=False, usuario=usuario
     )
     clt_dict = _build_costo_dict(
-        "clt", requires_campania=True, requires_lote=False
+        "clt", requires_campania=True, requires_lote=False, usuario=usuario
     )
 
     # ── Setup, secuencias y compatibilidad ────────────────────────────
@@ -255,8 +260,8 @@ def build_pyomo_input_data(usuario):
     }
 
 
-def _build_costo_dict(tipo_codigo, requires_campania, requires_lote, *, usuario=None):
-    costos = Costo.objects.filter(tipo_costo__codigo=tipo_codigo).select_related(
+def _build_costo_dict(tipo_codigo, requires_campania, requires_lote, *, usuario):
+    costos = Costo.objects.filter(usuario=usuario, tipo_costo__codigo=tipo_codigo).select_related(
         "cultivo", "campania", "lote"
     )
     if requires_lote:

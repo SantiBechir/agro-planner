@@ -3,9 +3,9 @@
 from accounts.views import login_view, logout_view
 from .dashboard import home
 from .lotes import lote_list, lote_create, lote_update, lote_toggle, lote_historial_add, lote_historial_delete
-from .cultivos import cultivo_list, cultivo_create, cultivo_delete, cultivo_limites_update
+from .cultivos import cultivo_list, cultivo_create, cultivo_delete, cultivo_desactivar
 from .costos import costo_list
-from .planificaciones import planificacion_list, ejecutar_optimizacion, planificacion_status, planificacion_status_partial
+from .planificaciones import planificacion_list, ejecutar_optimizacion, planificacion_status, planificacion_status_partial, planificacion_limites_update
 
 __all__ = [
     "login_view",
@@ -20,7 +20,8 @@ __all__ = [
     "cultivo_list",
     "cultivo_create",
     "cultivo_delete",
-    "cultivo_limites_update",
+    "planificacion_limites_update",
+    "cultivo_desactivar",
     "costo_list",
     "planificacion_list",
     "ejecutar_optimizacion",

@@ -6,7 +6,7 @@ from core.management.commands.deploy_release import Command as DeployReleaseComm
 class DeployReleaseCommandTest(TestCase):
     @patch.dict("os.environ", {}, clear=True)
     @patch("core.management.commands.deploy_release.call_command")
-    def test_release_migrates_and_loads_input_v51(self, call_command_mock):
+    def test_release_only_migrates_without_importing_global_or_personal_data(self, call_command_mock):
         DeployReleaseCommand().handle()
 
         self.assertEqual(call_command_mock.call_args_list[0].args, ("makemigrations",))
@@ -19,15 +19,7 @@ class DeployReleaseCommandTest(TestCase):
             call_command_mock.call_args_list[1].kwargs,
             {"interactive": False},
         )
-        self.assertEqual(
-            call_command_mock.call_args_list[2].args[0],
-            "cargar_input",
-        )
-        self.assertTrue(
-            call_command_mock.call_args_list[2].args[1]
-            .replace("\\", "/")
-            .endswith("docs/Input v5.1.xlsx")
-        )
+        self.assertEqual(call_command_mock.call_count, 2)
 
     @patch("core.management.commands.deploy_release.call_command", side_effect=SystemExit(1))
     def test_inconsistent_models_stop_release_before_database_writes(self, call_command_mock):

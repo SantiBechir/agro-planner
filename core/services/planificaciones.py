@@ -6,6 +6,8 @@ from django.db import connection, transaction
 
 from core.models import (
     CompatibilidadCultivoSuelo,
+    ConfiguracionCultivoUsuario,
+    Costo,
 
     Lote,
     Planificacion,
@@ -36,6 +38,18 @@ def _validar_lotes_habilitados(actor):
             "Debe habilitar al menos un lote para ejecutar la planificación."
         )
 
+    if not ConfiguracionCultivoUsuario.objects.filter(
+        usuario=actor, habilitado_optimizacion=True,
+    ).exists():
+        raise ValidationError("Debe habilitar al menos un cultivo para ejecutar la planificación.")
+
+    if Costo.objects.filter(
+        usuario=actor, configurado=False,
+        cultivo__configuraciones_usuario__usuario=actor,
+        cultivo__configuraciones_usuario__habilitado_optimizacion=True,
+    ).exists():
+        raise ValidationError("Hay precios o costos pendientes de revisar para los cultivos habilitados.")
+
     compatibles = set(
         CompatibilidadCultivoSuelo.objects.filter(compatible=True).values_list(
             "cultivo_id", "tipo_suelo_id"
@@ -43,7 +57,8 @@ def _validar_lotes_habilitados(actor):
     )
     limites = limites_para_usuario(actor).filter(
         min_ha__gt=0,
-        cultivo__habilitado_optimizacion=True,
+        cultivo__configuraciones_usuario__usuario=actor,
+        cultivo__configuraciones_usuario__habilitado_optimizacion=True,
     ).select_related("cultivo", "campania")
 
     minimos_por_campania = {}

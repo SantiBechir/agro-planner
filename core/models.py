@@ -85,6 +85,22 @@ class Cultivo(models.Model):
         return self.nombre
 
 
+class ConfiguracionCultivoUsuario(models.Model):
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    cultivo = models.ForeignKey(
+        Cultivo, on_delete=models.CASCADE, related_name="configuraciones_usuario"
+    )
+    habilitado_optimizacion = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["usuario", "cultivo"], name="unique_config_cultivo_usuario"
+        )]
+
+    def __str__(self):
+        return f"{self.usuario} / {self.cultivo}"
+
+
 class Lote(models.Model):
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -110,6 +126,18 @@ class Lote(models.Model):
                 Lower("nombre"), "usuario", name="unique_lote_nombre_ci_usuario"
             ),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.pk and (
+            self.costo_set.exclude(usuario_id=self.usuario_id).exists()
+            or self.asignacionloteslot_set.exclude(planificacion__usuario_id=self.usuario_id).exists()
+        ):
+            raise ValidationError({"usuario": "El propietario debe coincidir con los costos y las planificaciones del lote."})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nombre or self.codigo
@@ -151,6 +179,11 @@ class TipoCosto(models.Model):
 
 
 class Costo(models.Model):
+    # NULL se reserva para los datos anteriores pendientes de asignación.
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name="costos",
+    )
     cultivo = models.ForeignKey(Cultivo, on_delete=models.CASCADE)
     tipo_costo = models.ForeignKey(TipoCosto, on_delete=models.PROTECT)
     valor = models.FloatField()
@@ -165,18 +198,42 @@ class Costo(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["cultivo", "tipo_costo", "campania", "lote"],
-                name="unique_costo_cultivo_tipo_campania_lote",
-            )
+                fields=["usuario", "cultivo", "tipo_costo", "campania", "lote"],
+                condition=models.Q(campania__isnull=False, lote__isnull=False),
+                name="unique_costo_usuario_camp_lote",
+            ),
+            models.UniqueConstraint(
+                fields=["usuario", "cultivo", "tipo_costo", "campania"],
+                condition=models.Q(campania__isnull=False, lote__isnull=True),
+                name="unique_costo_usuario_camp",
+            ),
+            models.UniqueConstraint(
+                fields=["usuario", "cultivo", "tipo_costo", "lote"],
+                condition=models.Q(campania__isnull=True, lote__isnull=False),
+                name="unique_costo_usuario_lote",
+            ),
+            models.UniqueConstraint(
+                fields=["usuario", "cultivo", "tipo_costo"],
+                condition=models.Q(campania__isnull=True, lote__isnull=True),
+                name="unique_costo_usuario_base",
+            ),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.lote_id and self.lote.usuario_id != self.usuario_id:
+            raise ValidationError({"lote": "El lote debe pertenecer al propietario del costo."})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.tipo_costo.codigo} - {self.cultivo.codigo}"
 
 
 class LimiteSuperficieCultivoCampania(models.Model):
-    # Las filas sin usuario son la plantilla global importada desde el Excel.
-    # Cada cuenta recibe una copia editable antes de planificar.
+    # NULL se reserva para los datos anteriores pendientes de asignación.
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -439,6 +496,11 @@ class AsignacionLoteSlot(models.Model):
     rendimiento = models.FloatField(null=True, blank=True)
     ingreso = models.FloatField(null=True, blank=True)
     costo = models.FloatField(null=True, blank=True)
+
+    def clean(self):
+        super().clean()
+        if self.planificacion_id and self.lote_id and self.planificacion.usuario_id != self.lote.usuario_id:
+            raise ValidationError({"lote": "El lote debe pertenecer al propietario de la planificación."})
 
     def __str__(self):
         return f"{self.planificacion.nombre} - {self.lote.codigo} - {self.cultivo.codigo} ({self.slot.codigo})"

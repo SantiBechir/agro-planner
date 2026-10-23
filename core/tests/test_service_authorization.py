@@ -30,11 +30,15 @@ class ServiceAuthorizationTest(ServiceTestCase):
         with self.assertRaises(PermissionDenied):
             planificaciones.solicitar_planificacion(AnonymousUser(), nombre="No")
         self.assertFalse(Planificacion.objects.exists())
+        self.lote.usuario = self.reader
+        self.lote.save()
         plan = planificaciones.solicitar_planificacion(self.reader, nombre="Plan lector")
         self.assertEqual(plan.estado, Planificacion.Estado.PENDIENTE)
         self.assertFalse(plan.asignaciones.exists())
 
     def test_superuser_without_editor_group_can_write(self):
+        self.lote.usuario = self.reader
+        self.lote.save()
         self.reader.is_superuser = True
         lote = lotes.alternar_lote(self.reader, self.lote.pk)
         self.assertFalse(lote.habilitado)

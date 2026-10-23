@@ -1,43 +1,22 @@
-"""Límites de superficie personales para las planificaciones."""
-
-from django.db import transaction
-
+"""Límites personales; no se copian plantillas globales ni datos del archivo de excel."""
 from core.models import Campania, Cultivo, LimiteSuperficieCultivoCampania
+from core.services.authorization import require_authenticated
 
 
 def limites_para_usuario(usuario):
-    """Devuelve la configuración privada del usuario, creándola desde la plantilla.
-
-    Las filas sin ``usuario`` son la configuración base importada desde Excel.
-    Nunca se modifican cuando una persona edita sus propios límites.
-    """
+    require_authenticated(usuario)
     personales = LimiteSuperficieCultivoCampania.objects.filter(usuario=usuario)
     existentes = set(personales.values_list("cultivo_id", "campania_id"))
-    plantillas = {
-        (plantilla.cultivo_id, plantilla.campania_id): plantilla
-        for plantilla in LimiteSuperficieCultivoCampania.objects.filter(
-            usuario__isnull=True
-        ).select_related("cultivo", "campania")
-    }
-    faltantes = []
-    for cultivo in Cultivo.objects.all():
-        for campania in Campania.objects.all():
-            clave = (cultivo.pk, campania.pk)
-            if clave in existentes:
-                continue
-            plantilla = plantillas.get(clave)
-            faltantes.append(
-                LimiteSuperficieCultivoCampania(
-                    usuario=usuario,
-                    cultivo=cultivo,
-                    campania=campania,
-                    min_ha=plantilla.min_ha if plantilla else 0.0,
-                    max_ha=plantilla.max_ha if plantilla else 500.0,
-                )
-            )
+    campanias = list(Campania.objects.all())
+    faltantes = [
+        LimiteSuperficieCultivoCampania(
+            usuario=usuario, cultivo=cultivo, campania=campania,
+            min_ha=0.0, max_ha=500.0,
+        )
+        for cultivo in Cultivo.objects.all()
+        for campania in campanias
+        if (cultivo.pk, campania.pk) not in existentes
+    ]
     if faltantes:
-        with transaction.atomic():
-            LimiteSuperficieCultivoCampania.objects.bulk_create(
-                faltantes, ignore_conflicts=True
-            )
-    return LimiteSuperficieCultivoCampania.objects.filter(usuario=usuario)
+        LimiteSuperficieCultivoCampania.objects.bulk_create(faltantes, ignore_conflicts=True)
+    return personales

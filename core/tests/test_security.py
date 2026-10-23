@@ -49,6 +49,8 @@ class InputSecurityTest(ServiceTestCase):
 
     @override_settings(MAX_ACTIVE_PLANIFICATIONS=2)
     def test_queue_limit_counts_running_jobs_and_reopens_after_completion(self):
+        self.lote.usuario = self.reader
+        self.lote.save()
         first = planificaciones.solicitar_planificacion(self.reader, nombre="1")
         second = planificaciones.solicitar_planificacion(self.reader, nombre="2")
         second.estado = Planificacion.Estado.EJECUTANDO

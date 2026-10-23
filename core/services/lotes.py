@@ -83,6 +83,8 @@ def crear_lote(actor, *, nombre, ambientes):
                 habilitado=True,
             )
             _guardar_ambientes(lote, data)
+            from core.services.costos import preparar_arrendamientos_lote
+            preparar_arrendamientos_lote(actor, lote)
     except IntegrityError as exc:
         raise ValidationError(f'Ya existe un lote con el nombre "{nombre}".') from exc
     return lote

@@ -14,7 +14,7 @@ services:
       timeout: 3s
       retries: 12
 
-  # Migra y carga el input una vez, antes de iniciar web y worker.
+  # Aplica migraciones antes de iniciar web y worker. La carga del Excel es explícita.
   migrate:
     build: .
     command: python manage.py deploy_release

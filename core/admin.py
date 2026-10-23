@@ -7,6 +7,7 @@ from .models import (
     CampaniaHistorica,
     CompatibilidadCultivoSuelo,
     Costo,
+    ConfiguracionCultivoUsuario,
     Cultivo,
     HistorialLoteCultivo,
     ImpactoRotacion,
@@ -23,34 +24,94 @@ from .models import (
 )
 
 
+
+
+class GlobalModelAdmin(admin.ModelAdmin):
+    """Las reglas compartidas solo se administran con privilegios globales."""
+    def has_add_permission(self, request):
+        return request.user.is_superuser and super().has_add_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser and super().has_delete_permission(request, obj)
+
+
+class PrivateModelAdmin(admin.ModelAdmin):
+    owner_lookup = "usuario"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs if request.user.is_superuser else qs.filter(**{self.owner_lookup: request.user})
+
+    def get_list_filter(self, request):
+        return [
+            (item, admin.RelatedOnlyFieldListFilter)
+            if isinstance(item, str) and item in ("usuario", "lote", "planificacion") else item
+            for item in super().get_list_filter(request)
+        ]
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "usuario":
+            kwargs["required"] = True
+            if not request.user.is_superuser:
+                from django.contrib.auth import get_user_model
+                kwargs["queryset"] = get_user_model().objects.filter(pk=request.user.pk)
+                kwargs["initial"] = request.user.pk
+        if not request.user.is_superuser and db_field.name in ("lote", "planificacion", "origen"):
+            kwargs["queryset"] = db_field.remote_field.model.objects.filter(usuario=request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+class PrivateInline(admin.TabularInline):
+    owner_lookup = "lote__usuario"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs if request.user.is_superuser else qs.filter(**{self.owner_lookup: request.user})
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if not request.user.is_superuser and db_field.name in ("lote", "planificacion", "origen"):
+            kwargs["queryset"] = db_field.remote_field.model.objects.filter(usuario=request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(ConfiguracionCultivoUsuario)
+class ConfiguracionCultivoUsuarioAdmin(PrivateModelAdmin):
+    list_display = ("usuario", "cultivo", "habilitado_optimizacion")
+    list_filter = ("usuario", "habilitado_optimizacion")
+
+
 @admin.register(TipoSuelo)
-class TipoSueloAdmin(admin.ModelAdmin):
+class TipoSueloAdmin(GlobalModelAdmin):
     list_display = ("codigo", "nombre")
     search_fields = ("codigo", "nombre")
 
 
 @admin.register(Campania)
-class CampaniaAdmin(admin.ModelAdmin):
+class CampaniaAdmin(GlobalModelAdmin):
     list_display = ("codigo", "orden", "fecha_inicio", "fecha_fin")
     list_filter = ("orden",)
     search_fields = ("codigo",)
 
 
 @admin.register(SlotSiembra)
-class SlotSiembraAdmin(admin.ModelAdmin):
+class SlotSiembraAdmin(GlobalModelAdmin):
     list_display = ("codigo", "orden", "campania")
     list_filter = ("campania",)
     search_fields = ("codigo",)
 
 
 @admin.register(NivelAntiguedad)
-class NivelAntiguedadAdmin(admin.ModelAdmin):
+class NivelAntiguedadAdmin(GlobalModelAdmin):
     list_display = ("codigo", "orden", "lag", "alfa")
     ordering = ("orden",)
 
 
 @admin.register(Cultivo)
-class CultivoAdmin(admin.ModelAdmin):
+class CultivoAdmin(GlobalModelAdmin):
+    exclude = ("habilitado_optimizacion",)
     list_display = (
         "codigo",
         "nombre",
@@ -65,13 +126,13 @@ class CultivoAdmin(admin.ModelAdmin):
     search_fields = ("codigo", "nombre")
 
 
-class AmbienteInline(admin.TabularInline):
+class AmbienteInline(PrivateInline):
     model = Ambiente
     extra = 0
 
 
 @admin.register(Lote)
-class LoteAdmin(admin.ModelAdmin):
+class LoteAdmin(PrivateModelAdmin):
     list_display = (
         "codigo",
         "nombre",
@@ -87,41 +148,41 @@ class LoteAdmin(admin.ModelAdmin):
 
 
 @admin.register(TipoCosto)
-class TipoCostoAdmin(admin.ModelAdmin):
+class TipoCostoAdmin(GlobalModelAdmin):
     list_display = ("codigo", "descripcion", "unidad", "es_porcentual")
     search_fields = ("codigo", "descripcion")
 
 
 @admin.register(Costo)
-class CostoAdmin(admin.ModelAdmin):
-    list_display = ("cultivo", "tipo_costo", "valor", "campania", "lote")
+class CostoAdmin(PrivateModelAdmin):
+    list_display = ("usuario", "cultivo", "tipo_costo", "valor", "campania", "lote")
     list_filter = ("tipo_costo", "campania", "lote")
     search_fields = ("cultivo__codigo", "tipo_costo__codigo")
 
 
 @admin.register(LimiteSuperficieCultivoCampania)
-class LimiteSuperficieCultivoCampaniaAdmin(admin.ModelAdmin):
-    list_display = ("cultivo", "campania", "min_ha", "max_ha")
+class LimiteSuperficieCultivoCampaniaAdmin(PrivateModelAdmin):
+    list_display = ("usuario", "cultivo", "campania", "min_ha", "max_ha")
     list_filter = ("campania", "cultivo")
     search_fields = ("cultivo__codigo", "campania__codigo")
 
 
 @admin.register(RendimientoCultivoSuelo)
-class RendimientoCultivoSueloAdmin(admin.ModelAdmin):
+class RendimientoCultivoSueloAdmin(GlobalModelAdmin):
     list_display = ("cultivo", "tipo_suelo", "valor")
     list_filter = ("tipo_suelo",)
     search_fields = ("cultivo__codigo", "tipo_suelo__codigo")
 
 
 @admin.register(CompatibilidadCultivoSuelo)
-class CompatibilidadCultivoSueloAdmin(admin.ModelAdmin):
+class CompatibilidadCultivoSueloAdmin(GlobalModelAdmin):
     list_display = ("cultivo", "tipo_suelo", "compatible")
     list_filter = ("tipo_suelo", "compatible")
     search_fields = ("cultivo__codigo", "tipo_suelo__codigo")
 
 
 @admin.register(SetupCultivo)
-class SetupCultivoAdmin(admin.ModelAdmin):
+class SetupCultivoAdmin(GlobalModelAdmin):
     list_display = ("cultivo_previo", "cultivo_siguiente", "dias")
     search_fields = (
         "cultivo_previo__codigo",
@@ -130,7 +191,7 @@ class SetupCultivoAdmin(admin.ModelAdmin):
 
 
 @admin.register(SecuenciaPermitida)
-class SecuenciaPermitidaAdmin(admin.ModelAdmin):
+class SecuenciaPermitidaAdmin(GlobalModelAdmin):
     list_display = ("cultivo_previo", "cultivo_siguiente", "permitido")
     list_filter = ("permitido",)
     search_fields = (
@@ -140,7 +201,7 @@ class SecuenciaPermitidaAdmin(admin.ModelAdmin):
 
 
 @admin.register(ImpactoRotacion)
-class ImpactoRotacionAdmin(admin.ModelAdmin):
+class ImpactoRotacionAdmin(GlobalModelAdmin):
     list_display = ("cultivo_previo", "cultivo_actual", "valor")
     search_fields = (
         "cultivo_previo__codigo",
@@ -149,27 +210,29 @@ class ImpactoRotacionAdmin(admin.ModelAdmin):
 
 
 @admin.register(CampaniaHistorica)
-class CampaniaHistoricaAdmin(admin.ModelAdmin):
+class CampaniaHistoricaAdmin(GlobalModelAdmin):
     list_display = ("codigo", "anio_inicio")
     ordering = ("-anio_inicio",)
     search_fields = ("codigo",)
 
 
 @admin.register(HistorialLoteCultivo)
-class HistorialLoteCultivoAdmin(admin.ModelAdmin):
+class HistorialLoteCultivoAdmin(PrivateModelAdmin):
+    owner_lookup = "lote__usuario"
     list_display = ("lote", "cultivo", "campania_historica", "presente")
     list_filter = ("campania_historica", "presente")
     search_fields = ("lote__codigo", "cultivo__codigo")
 
 
-class AsignacionInline(admin.TabularInline):
+class AsignacionInline(PrivateInline):
+    owner_lookup = "planificacion__usuario"
     model = AsignacionLoteSlot
     extra = 0
     raw_id_fields = ("lote", "cultivo", "slot")
 
 
 @admin.register(Planificacion)
-class PlanificacionAdmin(admin.ModelAdmin):
+class PlanificacionAdmin(PrivateModelAdmin):
     list_display = ("nombre", "usuario", "fecha_creacion", "profit", "ilu", "estado")
     list_filter = ("estado", "fecha_creacion", "usuario")
     search_fields = ("nombre", "usuario__email")
@@ -177,7 +240,8 @@ class PlanificacionAdmin(admin.ModelAdmin):
 
 
 @admin.register(AsignacionLoteSlot)
-class AsignacionLoteSlotAdmin(admin.ModelAdmin):
+class AsignacionLoteSlotAdmin(PrivateModelAdmin):
+    owner_lookup = "planificacion__usuario"
     list_display = (
         "planificacion",
         "lote",

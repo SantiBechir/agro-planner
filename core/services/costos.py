@@ -9,8 +9,8 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 
-from core.models import Campania, Costo, Cultivo, TipoCosto, TipoSuelo
-from core.services.authorization import require_editor
+from core.models import Campania, ConfiguracionCultivoUsuario, Costo, Cultivo, Lote, TipoCosto, TipoSuelo
+from core.services.authorization import require_authenticated, require_editor
 
 # Componentes oficiales del costo de siembra desagregado
 COMPONENTES_SIEMBRA = (
@@ -84,7 +84,7 @@ def actualizar_costos(actor, valores, *, cultivo_id=None, habilitar=False):
             ) from exc
 
     with transaction.atomic():
-        costos_by_id = Costo.objects.in_bulk([pk for pk, _ in updates])
+        costos_by_id = Costo.objects.filter(usuario=actor).in_bulk([pk for pk, _ in updates])
         changed = 0
         for pk, value in updates:
             costo = costos_by_id.get(pk)
@@ -100,17 +100,23 @@ def actualizar_costos(actor, valores, *, cultivo_id=None, habilitar=False):
         cultivo_habilitado = None
         cultivo = obtener_cultivo(cultivo_id) if habilitar else None
         if cultivo is not None:
-            pendientes = contar_costos_pendientes(cultivo)
+            preparar_costos_cultivo(actor, cultivo)
+            pendientes = contar_costos_pendientes(cultivo, actor)
+            if not cultivo.costo_set.filter(usuario=actor).exists():
+                raise ValidationError("Inicializá el modelo y configurá los costos antes de habilitar el cultivo.")
             if not pendientes:
+                ConfiguracionCultivoUsuario.objects.update_or_create(
+                    usuario=actor, cultivo=cultivo, defaults={"habilitado_optimizacion": True},
+                )
                 cultivo.habilitado_optimizacion = True
-                cultivo.save(update_fields=["habilitado_optimizacion"])
                 cultivo_habilitado = cultivo
     return ActualizacionCostos(changed, pendientes, cultivo_habilitado)
 
 
-def consultar_costos(*, selected_tipo="", selected_campania="", selected_cultivo="", selected_page="1", selected_arrendamiento_page="1"):
+def consultar_costos(usuario, *, selected_tipo="", selected_campania="", selected_cultivo="", selected_page="1", selected_arrendamiento_page="1"):
+    require_authenticated(usuario)
     costos = (
-        Costo.objects.select_related("cultivo", "tipo_costo", "campania", "lote")
+        Costo.objects.filter(usuario=usuario).select_related("cultivo", "tipo_costo", "campania", "lote")
         .exclude(BARBECHO_COST_Q)
         .order_by(
             "tipo_costo__codigo",
@@ -156,11 +162,12 @@ def consultar_costos(*, selected_tipo="", selected_campania="", selected_cultivo
     }
 
 
-def consultar_totales_siembra(*, tipo_seleccionado_codigo, selected_campania="", selected_cultivo=""):
+def consultar_totales_siembra(usuario, *, tipo_seleccionado_codigo, selected_campania="", selected_cultivo=""):
+    require_authenticated(usuario)
     totales_siembra = []
     if tipo_seleccionado_codigo in (None, *COMPONENTES_SIEMBRA):
         componentes = (
-            Costo.objects.filter(tipo_costo__codigo__in=COMPONENTES_SIEMBRA)
+            Costo.objects.filter(usuario=usuario, tipo_costo__codigo__in=COMPONENTES_SIEMBRA)
             .exclude(BARBECHO_COST_Q)
             .select_related("cultivo", "tipo_costo", "campania")
         )
@@ -216,10 +223,47 @@ def obtener_cultivo(cultivo_id):
     return Cultivo.objects.filter(pk=cultivo_id).first() if cultivo_id else None
 
 
-def contar_costos_pendientes(cultivo):
-    return cultivo.costo_set.filter(configurado=False).count() if cultivo else 0
+def contar_costos_pendientes(cultivo, usuario):
+    require_authenticated(usuario)
+    return cultivo.costo_set.filter(usuario=usuario, configurado=False).count() if cultivo else 0
+
+
+def preparar_costos_cultivo(usuario, cultivo):
+    """Crea únicamente las entradas faltantes del propietario, pendientes de revisión."""
+    require_editor(usuario)
+    tipos = {obj.codigo: obj for obj in TipoCosto.objects.all()}
+    campanias = list(Campania.objects.all())
+    lotes = list(Lote.objects.filter(usuario=usuario))
+    for codigo in ("tf", "scp", "st", "fsp", *COMPONENTES_SIEMBRA, "hc", "cp", "cst", "clt", "frc", "vr"):
+        if codigo not in tipos:
+            continue
+        if codigo in ("tf", "scp", "st"):
+            combinations = [(None, None)]
+        elif codigo in ("frc", "vr"):
+            combinations = [(campania, lote) for campania in campanias for lote in lotes]
+        else:
+            combinations = [(campania, None) for campania in campanias]
+        for campania, lote in combinations:
+            Costo.objects.get_or_create(
+                usuario=usuario, cultivo=cultivo, tipo_costo=tipos[codigo],
+                campania=campania, lote=lote,
+                defaults={"valor": 0.0, "configurado": False},
+            )
+
 
 
 def anio_base_costos():
     return (Campania.objects.order_by("orden")
             .values_list("fecha_inicio__year", flat=True).first() or 2025)
+
+
+def preparar_arrendamientos_lote(usuario, lote):
+    require_editor(usuario)
+    for config in ConfiguracionCultivoUsuario.objects.filter(usuario=usuario):
+        for tipo in TipoCosto.objects.filter(codigo__in=("frc", "vr")):
+            for campania in Campania.objects.all():
+                Costo.objects.get_or_create(
+                    usuario=usuario, cultivo=config.cultivo, tipo_costo=tipo,
+                    campania=campania, lote=lote,
+                    defaults={"valor": 0.0, "configurado": False},
+                )
