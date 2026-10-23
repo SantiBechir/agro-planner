@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from accounts.roles import EDITOR_ROLE, READER_ROLE, set_functional_role
-from core.models import Ambiente, Campania, Costo, Cultivo, Lote, TipoCosto, TipoSuelo
+from core.models import Ambiente, Campania, ConfiguracionCultivoUsuario, Costo, Cultivo, Lote, TipoCosto, TipoSuelo
 
 
 class ServiceTestCase(TestCase):
@@ -29,7 +29,10 @@ class ServiceTestCase(TestCase):
             codigo="TRIGO", nombre="Trigo", duracion_dias=120,
             siembra_inicio=1, siembra_fin=60, habilitado_optimizacion=False,
         )
+        ConfiguracionCultivoUsuario.objects.create(usuario=cls.editor, cultivo=cls.cultivo, habilitado_optimizacion=True)
+        ConfiguracionCultivoUsuario.objects.create(usuario=cls.reader, cultivo=cls.cultivo, habilitado_optimizacion=True)
         cls.lote = Lote.objects.create(
+            usuario=cls.editor,
             codigo="J1", nombre="Lote 1", superficie_ha=10, tipo_suelo=cls.suelo,
             max_cultivos_principales=10, max_cultivos_secundarios=10,
         )
@@ -38,6 +41,7 @@ class ServiceTestCase(TestCase):
         )
         cls.tipo = TipoCosto.objects.create(codigo="fsp", descripcion="Precio")
         cls.costo = Costo.objects.create(
+            usuario=cls.editor,
             cultivo=cls.cultivo, tipo_costo=cls.tipo, campania=cls.campania,
             valor=100, configurado=False,
         )

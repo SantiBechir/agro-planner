@@ -5,11 +5,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Q
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
 from accounts.roles import editor_required
-from core.models import Cultivo, TipoSuelo
+from core.models import ConfiguracionCultivoUsuario, Cultivo, TipoSuelo
 from core.services.cultivos import crear_cultivo, eliminar_cultivo
 
 logger = logging.getLogger(__name__)
@@ -22,10 +22,10 @@ def cultivo_list(request, form_data=None, open_modal=False):
             Q(codigo__icontains="BARBECHO") | Q(nombre__icontains="BARBECHO")
         )
         .annotate(
-            costos_totales=Count("costo"),
+            costos_totales=Count("costo", filter=Q(costo__usuario=request.user)),
             costos_pendientes=Count(
                 "costo",
-                filter=Q(costo__configurado=False),
+                filter=Q(costo__usuario=request.user, costo__configurado=False),
             ),
         )
         .prefetch_related("rendimientocultivosuelo_set__tipo_suelo")
@@ -39,7 +39,11 @@ def cultivo_list(request, form_data=None, open_modal=False):
     for suelo in tipos_suelo:
         suelo.form_value = form_data.get(f"rendimiento_{suelo.id}", "")
 
+    habilitados = set(ConfiguracionCultivoUsuario.objects.filter(
+        usuario=request.user, habilitado_optimizacion=True,
+    ).values_list("cultivo_id", flat=True))
     for cultivo in cultivos:
+        cultivo.habilitado_optimizacion = cultivo.pk in habilitados
         # Calcular fechas de inicio y fin asumiendo campaña del 01/06 al 31/05 del año siguiente
         st_date = base_date + timedelta(days=int(cultivo.siembra_inicio) - 1)
         ht_date = base_date + timedelta(days=int(cultivo.siembra_fin) - 1)
@@ -95,6 +99,18 @@ def cultivo_create(request):
         messages.error(request, "No se pudo crear el cultivo. Intentá nuevamente o contactá al administrador.")
         return cultivo_list(request, form_data=form_data, open_modal=True)
     messages.success(request, f"Cultivo {cultivo.codigo} creado. Completa sus precios y costos antes de habilitarlo.")
+    return cultivo_list(request)
+
+
+@login_required(login_url="login")
+@editor_required
+@require_POST
+def cultivo_desactivar(request, pk):
+    cultivo = get_object_or_404(Cultivo, pk=pk)
+    ConfiguracionCultivoUsuario.objects.filter(
+        usuario=request.user, cultivo=cultivo,
+    ).update(habilitado_optimizacion=False)
+    messages.success(request, f"Cultivo {cultivo.nombre} deshabilitado para tus planificaciones.")
     return cultivo_list(request)
 
 

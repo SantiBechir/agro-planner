@@ -8,12 +8,11 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
 from core.models import (
-    AsignacionLoteSlot, Campania, CompatibilidadCultivoSuelo, Costo, Cultivo,
-    HistorialLoteCultivo, Lote,
-    RendimientoCultivoSuelo, TipoCosto, TipoSuelo,
+    AsignacionLoteSlot, ConfiguracionCultivoUsuario, CompatibilidadCultivoSuelo,
+    Costo, Cultivo, HistorialLoteCultivo, LimiteSuperficieCultivoCampania,
+    RendimientoCultivoSuelo, TipoSuelo,
 )
 from core.services.authorization import require_editor
-from core.services.costos import COMPONENTES_SIEMBRA
 
 
 def crear_cultivo(actor, *, nombre, tipo, duracion_dias, siembra_inicio_fecha,
@@ -82,57 +81,9 @@ def crear_cultivo(actor, *, nombre, tipo, duracion_dias, siembra_inicio_fecha,
                     compatible=True
                 )
 
-            tipos_costo = {
-                tipo.codigo: tipo
-                for tipo in TipoCosto.objects.filter(
-                    codigo__in=[
-                        "fsp", *COMPONENTES_SIEMBRA, "hc", "frc", "vr", "tf",
-                        "scp", "cp", "st", "cst", "clt",
-                    ]
-                )
-            }
-            campanias = list(Campania.objects.order_by("orden"))
-            lotes = list(Lote.objects.order_by("codigo"))
-            costos = []
-
-            for codigo_tipo in ("tf", "scp", "st"):
-                if codigo_tipo in tipos_costo:
-                    costos.append(Costo(
-                        cultivo=cultivo,
-                        tipo_costo=tipos_costo[codigo_tipo],
-                        valor=0,
-                        configurado=False,
-                    ))
-
-            for codigo_tipo in ("fsp", *COMPONENTES_SIEMBRA, "hc", "cp", "cst", "clt"):
-                if codigo_tipo in tipos_costo:
-                    costos.extend(
-                        Costo(
-                            cultivo=cultivo,
-                            tipo_costo=tipos_costo[codigo_tipo],
-                            campania=campania,
-                            valor=0,
-                            configurado=False,
-                        )
-                        for campania in campanias
-                    )
-
-            for codigo_tipo in ("frc", "vr"):
-                if codigo_tipo in tipos_costo:
-                    costos.extend(
-                        Costo(
-                            cultivo=cultivo,
-                            tipo_costo=tipos_costo[codigo_tipo],
-                            campania=campania,
-                            lote=lote,
-                            valor=0,
-                            configurado=False,
-                        )
-                        for campania in campanias
-                        for lote in lotes
-                    )
-
-            Costo.objects.bulk_create(costos)
+            from core.services.costos import preparar_costos_cultivo
+            ConfiguracionCultivoUsuario.objects.create(usuario=actor, cultivo=cultivo)
+            preparar_costos_cultivo(actor, cultivo)
     except (TypeError, ValueError) as exc:
         raise ValidationError("Los datos del cultivo no son válidos.") from exc
     return cultivo
@@ -151,6 +102,9 @@ def eliminar_cultivo(actor, *, cultivo_id):
         if (
             HistorialLoteCultivo.objects.filter(cultivo=cultivo).exists()
             or AsignacionLoteSlot.objects.filter(cultivo=cultivo).exists()
+            or Costo.objects.filter(cultivo=cultivo, usuario__isnull=False).exclude(usuario=actor).exists()
+            or ConfiguracionCultivoUsuario.objects.filter(cultivo=cultivo).exclude(usuario=actor).exists()
+            or LimiteSuperficieCultivoCampania.objects.filter(cultivo=cultivo, usuario__isnull=False).exclude(usuario=actor).exists()
         ):
             raise ValidationError(
                 "No se puede eliminar este cultivo porque figura en el historial "

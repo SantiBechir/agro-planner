@@ -5,6 +5,7 @@ from collections import defaultdict
 from django.db.models import Q
 
 from core.models import Campania, CompatibilidadCultivoSuelo, Costo, Cultivo, Lote
+from core.services.authorization import require_authenticated
 from core.services.costos import calcular_sc_para_cultivo_campania
 
 
@@ -12,18 +13,19 @@ from core.services.costos import calcular_sc_para_cultivo_campania
 PRODUCTIVITY_LEVELS = {"A": 1.2, "M": 1.0, "B": 0.8}
 
 
-def build_economic_indicators():
+def build_economic_indicators(usuario):
     """Return margins and break-even yields from the current database inputs.
 
     This mirrors the current solver's revenue and cost equations.  It never
     instantiates or changes the Pyomo model, the database, or Excel inputs.
     """
+    require_authenticated(usuario)
     barbecho_q = Q(codigo__iexact="BARBECHO") | Q(nombre__iexact="BARBECHO")
-    cultivos = list(Cultivo.objects.exclude(barbecho_q).order_by("codigo"))
+    cultivos = list(Cultivo.objects.filter(costo__usuario=usuario).exclude(barbecho_q).distinct().order_by("codigo"))
     campanias = list(Campania.objects.order_by("orden"))
 
-    values = _cost_values(cultivos)
-    rental_by_crop_campaign = _average_rental_per_hectare(cultivos, campanias)
+    values = _cost_values(cultivos, usuario)
+    rental_by_crop_campaign = _average_rental_per_hectare(cultivos, campanias, usuario)
     yield_by_crop_soil = {
         (rendimiento.cultivo_id, rendimiento.tipo_suelo_id): rendimiento.valor
         for cultivo in cultivos
@@ -75,9 +77,9 @@ def build_economic_indicators():
     return {"margins": margins, "break_even": break_even}
 
 
-def _cost_values(cultivos):
+def _cost_values(cultivos, usuario):
     values = {}
-    for costo in Costo.objects.filter(cultivo__in=cultivos).select_related(
+    for costo in Costo.objects.filter(usuario=usuario, cultivo__in=cultivos).select_related(
         "tipo_costo"
     ):
         values[(costo.cultivo_id, costo.tipo_costo.codigo, costo.campania_id, costo.lote_id)] = costo.valor
@@ -110,11 +112,11 @@ def _inputs_for(cultivo_id, campania_id, values):
     return inputs
 
 
-def _average_rental_per_hectare(cultivos, campanias):
+def _average_rental_per_hectare(cultivos, campanias, usuario):
     """Weighted rental inputs per ha, using the solver's fixed/variable inputs."""
     result = defaultdict(lambda: (0.0, 0.0))
-    lots = list(Lote.objects.select_related("tipo_suelo"))
-    costs = _cost_values(cultivos)
+    lots = list(Lote.objects.filter(usuario=usuario).select_related("tipo_suelo"))
+    costs = _cost_values(cultivos, usuario)
 
     compatible = {
         (item.cultivo_id, item.tipo_suelo_id)

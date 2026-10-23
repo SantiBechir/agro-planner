@@ -21,7 +21,7 @@ def lote_list(
     create_ambientes=None,
 ):
     lotes = (
-        Lote.objects.all()
+        Lote.objects.filter(usuario=request.user)
         .annotate(
             codigo_es_numerico=Case(
                 When(codigo__regex=r"^J\d+$", then=Value(0)),
@@ -142,7 +142,7 @@ def lote_create(request):
 @editor_required
 @require_POST
 def lote_update(request, pk):
-    get_object_or_404(Lote, pk=pk)
+    get_object_or_404(Lote, pk=pk, usuario=request.user)
     try:
         lote = lotes.actualizar_lote(
             request.user, pk, nombre=(request.POST.get("nombre") or "").strip(),
@@ -159,7 +159,7 @@ def lote_update(request, pk):
 @editor_required
 @require_POST
 def lote_toggle(request, pk):
-    get_object_or_404(Lote, pk=pk)
+    get_object_or_404(Lote, pk=pk, usuario=request.user)
     lote = lotes.alternar_lote(request.user, pk)
     estado = "activado" if lote.habilitado else "desactivado"
     messages.success(request, f"Lote {lote.codigo} {estado}.")
@@ -170,7 +170,7 @@ def lote_toggle(request, pk):
 @editor_required
 @require_POST
 def lote_historial_add(request, pk):
-    get_object_or_404(Lote, pk=pk)
+    get_object_or_404(Lote, pk=pk, usuario=request.user)
     try:
         campania, lote = historial.cargar_historial(
             request.user, pk,
@@ -191,7 +191,7 @@ def lote_historial_add(request, pk):
 @editor_required
 @require_POST
 def lote_historial_delete(request, pk, anio_inicio):
-    get_object_or_404(Lote, pk=pk)
+    get_object_or_404(Lote, pk=pk, usuario=request.user)
     eliminados = historial.eliminar_historial(request.user, pk, anio_inicio=anio_inicio)
     if eliminados:
         messages.success(request, f"Historial de la campaña {anio_inicio}/{anio_inicio + 1} eliminado.")

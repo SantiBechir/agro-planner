@@ -120,7 +120,9 @@ docker compose exec web python manage.py createsuperuser
 ```
 
 El web verifica la seguridad antes de arrancar. El comando de release verifica
-que modelos y migraciones coincidan antes de migrar e importar el Excel.
+que modelos y migraciones coincidan antes de aplicar migraciones. La inicialización del modelo global y la importación
+personal se ejecutan explícitamente después de crear la cuenta destinataria; ver
+[datos por usuario](datos-por-usuario.md).
 Se deben ejecutar migraciones también para
 `django-axes`; Compose ya lo hace. No usar `runserver` en producción.
 HSTS dura un día y se aplica al dominio de la app. No se fuerza en subdominios

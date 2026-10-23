@@ -46,7 +46,7 @@
 
   <!-- Grid de Cultivos (Light Theme) -->
   <div
-    class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+    class="grid grid-cols-1 items-start gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
   >
     {% for cultivo in cultivos %}
     <!-- Card Cultivo -->
@@ -100,6 +100,12 @@
             <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>
             Habilitado
           </span>
+          {% if request.user.can_edit_agricultural_data %}
+          <form hx-post="{% url 'cultivo_desactivar' cultivo.pk %}" hx-target="#main-content">
+            {% csrf_token %}
+            <button type="submit" class="text-[10px] font-semibold text-slate-500 underline">Deshabilitar</button>
+          </form>
+          {% endif %}
           {% else %}
           <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
             <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>

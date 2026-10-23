@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.shortcuts import render
 
+from accounts.roles import has_editor_access
+from core.models import ConfiguracionCultivoUsuario
 from core.presentation import economia
 from core.services import costos
 from core.services.economic_indicators import build_economic_indicators
@@ -79,8 +81,8 @@ def _actualizar_costos(request, cultivo_id):
     return resultado
 
 
-def _contexto_costos(filtros, cultivo):
-    listado = costos.consultar_costos(**{
+def _contexto_costos(usuario, filtros, cultivo):
+    listado = costos.consultar_costos(usuario, **{
         key: filtros[key] for key in (
             "selected_tipo", "selected_campania", "selected_cultivo",
             "selected_page", "selected_arrendamiento_page",
@@ -96,7 +98,7 @@ def _contexto_costos(filtros, cultivo):
     if filtros["selected_tab"] == "margenes":
         indicator_filter_keys.append("selected_suelo")
     indicadores = economia.filtrar_indicadores(
-        build_economic_indicators(),
+        build_economic_indicators(usuario),
         **{key: filtros[key] for key in indicator_filter_keys},
     )
     return {
@@ -121,12 +123,13 @@ def _contexto_costos(filtros, cultivo):
         ) or (filtros["selected_tab"] == "indiferencia" and filtros["ri_view"] == "lista"),
         "show_costo_cultivo_help": tipo_codigo in costos.COMPONENTES_SIEMBRA,
         "totales_siembra": costos.consultar_totales_siembra(
+            usuario,
             tipo_seleccionado_codigo=tipo_codigo,
             selected_campania=filtros["selected_campania"],
             selected_cultivo=filtros["selected_cultivo"],
         ),
         "selected_cultivo_obj": cultivo,
-        "costos_pendientes": costos.contar_costos_pendientes(cultivo),
+        "costos_pendientes": costos.contar_costos_pendientes(cultivo, usuario),
     }
 
 
@@ -156,8 +159,14 @@ def costo_list(request):
             }
         session["costos_comparaciones"] = saved_comparisons
     cultivo = costos.obtener_cultivo(filtros["selected_cultivo"])
+    if cultivo is not None:
+        if has_editor_access(request.user):
+            costos.preparar_costos_cultivo(request.user, cultivo)
+        cultivo.habilitado_optimizacion = ConfiguracionCultivoUsuario.objects.filter(
+            usuario=request.user, cultivo=cultivo, habilitado_optimizacion=True,
+        ).exists()
     if request.method == "POST":
         resultado = _actualizar_costos(request, cultivo.pk if cultivo else None)
         if resultado is not None and resultado.cultivo_habilitado is not None:
             cultivo = resultado.cultivo_habilitado
-    return render(request, "core/costos_list.html", _contexto_costos(filtros, cultivo))
+    return render(request, "core/costos_list.html", _contexto_costos(request.user, filtros, cultivo))

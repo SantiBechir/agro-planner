@@ -1,3 +1,4 @@
+from .support import test_usuario
 from unittest.mock import patch
 
 import pyomo.environ as pyo
@@ -75,12 +76,12 @@ class SolverV51Test(SimpleTestCase):
 class SolverV51PersistenceTest(TestCase):
     def test_environment_inputs_and_per_hectare_indicators(self):
         soils = [TipoSuelo.objects.create(codigo=code) for code in ['S1', 'S2']]
-        lot = Lote.objects.create(codigo='J1', superficie_ha=100, tipo_suelo=soils[0],
+        lot = Lote.objects.create(usuario=test_usuario(), codigo='J1', superficie_ha=100, tipo_suelo=soils[0],
                                  max_cultivos_principales=1, max_cultivos_secundarios=1)
         for soil, area, level in zip(soils, [60, 40], ['A', 'B']):
             Ambiente.objects.create(lote=lot, tipo_suelo=soil, superficie_ha=area,
                                     rendimiento_esperado=level)
-        data = build_pyomo_input_data()
+        data = build_pyomo_input_data(test_usuario())
         self.assertEqual(data['ep_dict'], {('J1', 'S1'): .6, ('J1', 'S2'): .4})
         self.assertEqual(data['py_dict'], {('J1', 'S1'): 1.2, ('J1', 'S2'): .8})
 
@@ -90,10 +91,10 @@ class SolverV51PersistenceTest(TestCase):
         crop.rendimientocultivosuelo_set.create(tipo_suelo=soils[0], valor=4)
         for code, value in [('frc', 100), ('fsp', 200), ('st', .25), ('cst', 30), ('clt', 40)]:
             kind = TipoCosto.objects.create(codigo=code)
-            Costo.objects.create(cultivo=crop, tipo_costo=kind, valor=value,
+            Costo.objects.create(usuario=test_usuario(), cultivo=crop, tipo_costo=kind, valor=value,
                                  campania=None if code == 'st' else campaign,
                                  lote=lot if code == 'frc' else None)
-        indicators = build_economic_indicators()
+        indicators = build_economic_indicators(test_usuario())
         rows = indicators['margins']
         self.assertEqual(len(rows), 3)
         for row in rows:
@@ -103,14 +104,14 @@ class SolverV51PersistenceTest(TestCase):
     def test_saved_assignments_reconcile_with_profit(self):
         data = example_data()
         soil = TipoSuelo.objects.create(codigo='S1')
-        Lote.objects.create(codigo='J1', superficie_ha=100, tipo_suelo=soil,
+        Lote.objects.create(usuario=test_usuario(), codigo='J1', superficie_ha=100, tipo_suelo=soil,
                             max_cultivos_principales=1, max_cultivos_secundarios=1)
         for code in data['i']:
             Cultivo.objects.create(codigo=code, duracion_dias=80, siembra_inicio=0, siembra_fin=300)
         campaign = Campania.objects.create(codigo='C1', orden=1)
         for order, code in enumerate(data['t'], 1):
             SlotSiembra.objects.create(codigo=code, orden=order, campania=campaign)
-        plan = Planificacion.objects.create(nombre='Modelo v5.1')
+        plan = Planificacion.objects.create(usuario=test_usuario(), nombre='Modelo v5.1')
         with patch('core.services.solver.build_pyomo_input_data', return_value=data):
             self.assertTrue(run_optimization(plan.pk))
         plan.refresh_from_db()

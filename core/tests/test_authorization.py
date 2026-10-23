@@ -1,3 +1,4 @@
+from core.models import ConfiguracionCultivoUsuario
 from datetime import datetime
 
 from django.contrib.auth import get_user_model
@@ -41,7 +42,7 @@ class RoleAuthorizationTest(TestCase):
 
         self.soil = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
         self.campaign = Campania.objects.create(codigo="C1", orden=1)
-        self.lot = Lote.objects.create(
+        self.lot = Lote.objects.create(usuario=self.editor,
             codigo="J1",
             nombre="Parcela Norte",
             superficie_ha=100,
@@ -71,10 +72,11 @@ class RoleAuthorizationTest(TestCase):
             cultivo=self.crop,
             campania_historica=historical_campaign,
         )
-        self.cost_type = TipoCosto.objects.create(
-            codigo="fsp", descripcion="Precio", unidad="USD/t"
+        self.cost_type = TipoCosto.objects.create(codigo="fsp", descripcion="Precio", unidad="USD/t"
         )
-        self.cost = Costo.objects.create(
+        for user in (self.editor, self.reader):
+            ConfiguracionCultivoUsuario.objects.create(usuario=user, cultivo=self.crop, habilitado_optimizacion=True)
+        self.cost = Costo.objects.create(usuario=self.editor,
             cultivo=self.crop,
             tipo_costo=self.cost_type,
             campania=self.campaign,
@@ -222,6 +224,7 @@ class RoleAuthorizationTest(TestCase):
             reverse("costo_list"),
             reverse("planificacion_list"),
         )
+        Lote.objects.create(usuario=self.reader, codigo="J1", nombre="Lote lector", superficie_ha=100, tipo_suelo=self.soil, max_cultivos_principales=10, max_cultivos_secundarios=10)
         for user in (self.editor, self.reader):
             self.client.force_login(user)
             for url in read_urls:
@@ -277,4 +280,7 @@ class RoleAuthorizationTest(TestCase):
         self.assertEqual(superuser.functional_role, "Superusuario")
         self.client.force_login(superuser)
         response = self.client.post(reverse("lote_toggle", args=[self.lot.pk]))
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 404)
+        self.lot.usuario = superuser
+        self.lot.save()
+        self.assertEqual(self.client.post(reverse("lote_toggle", args=[self.lot.pk])).status_code, 200)

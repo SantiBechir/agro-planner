@@ -6,11 +6,14 @@ from django.db import connection, transaction
 
 from core.models import (
     CompatibilidadCultivoSuelo,
-    LimiteSuperficieCultivoCampania,
+    ConfiguracionCultivoUsuario,
+    Costo,
+
     Lote,
     Planificacion,
 )
 from core.services.authorization import require_authenticated
+from core.services.limites import limites_para_usuario
 
 
 def _hay_combinacion_de_superficies(lotes, objetivo):
@@ -27,24 +30,38 @@ def _hay_combinacion_de_superficies(lotes, objetivo):
     return any(abs(superficie - objetivo) <= 1e-6 for superficie in alcanzables)
 
 
-def _validar_lotes_habilitados():
+def _validar_lotes_habilitados(actor):
     """Detecta mínimos de superficie imposibles antes de enviar el solver."""
-    lotes = list(Lote.objects.filter(habilitado=True).select_related("tipo_suelo"))
+    lotes = list(Lote.objects.filter(usuario=actor, habilitado=True).select_related("tipo_suelo"))
     if not lotes:
         raise ValidationError(
             "Debe habilitar al menos un lote para ejecutar la planificación."
         )
+
+    if not ConfiguracionCultivoUsuario.objects.filter(
+        usuario=actor, habilitado_optimizacion=True,
+    ).exists():
+        raise ValidationError("Debe habilitar al menos un cultivo para ejecutar la planificación.")
+
+    if Costo.objects.filter(
+        usuario=actor, configurado=False,
+        cultivo__configuraciones_usuario__usuario=actor,
+        cultivo__configuraciones_usuario__habilitado_optimizacion=True,
+    ).exists():
+        raise ValidationError("Hay precios o costos pendientes de revisar para los cultivos habilitados.")
 
     compatibles = set(
         CompatibilidadCultivoSuelo.objects.filter(compatible=True).values_list(
             "cultivo_id", "tipo_suelo_id"
         )
     )
-    limites = LimiteSuperficieCultivoCampania.objects.filter(
+    limites = limites_para_usuario(actor).filter(
         min_ha__gt=0,
-        cultivo__habilitado_optimizacion=True,
+        cultivo__configuraciones_usuario__usuario=actor,
+        cultivo__configuraciones_usuario__habilitado_optimizacion=True,
     ).select_related("cultivo", "campania")
 
+    minimos_por_campania = {}
     for limite in limites:
         lotes_compatibles = [
             lote
@@ -57,11 +74,15 @@ def _validar_lotes_habilitados():
         )
         if superficie_compatible + 1e-9 < limite.min_ha:
             raise ValidationError(
-                f"No hay superficie habilitada suficiente para {limite.cultivo.nombre} "
-                f"en {limite.campania.codigo}: se requieren al menos "
-                f"{limite.min_ha:g} ha y los lotes habilitados compatibles "
-                f"suman {superficie_compatible:g} ha."
+                f"No se puede planificar {limite.cultivo.nombre} en "
+                f"{limite.campania.codigo}: configuraste un mínimo de "
+                f"{limite.min_ha:g} ha, pero solo tenés "
+                f"{superficie_compatible:g} ha habilitadas y compatibles. "
+                "Reducí el mínimo o habilitá/agregá más superficie compatible."
             )
+        minimos_por_campania[limite.campania] = (
+            minimos_por_campania.get(limite.campania, 0.0) + limite.min_ha
+        )
         if (
             limite.cultivo.no_repetir_sin_intermedio
             and abs(limite.min_ha - limite.max_ha) <= 1e-9
@@ -70,10 +91,20 @@ def _validar_lotes_habilitados():
             )
         ):
             raise ValidationError(
-                f"La planificación requiere exactamente {limite.min_ha:g} ha de "
-                f"{limite.cultivo.nombre} en {limite.campania.codigo}, pero "
-                "ninguna combinación de los lotes habilitados compatibles alcanza "
-                "esa superficie. Habilite un lote adecuado o ajuste ese límite."
+                f"No se puede planificar {limite.cultivo.nombre} en "
+                f"{limite.campania.codigo}: configuraste exactamente "
+                f"{limite.min_ha:g} ha, pero ninguna combinación de lotes "
+                "compatibles alcanza esa superficie. Ajustá el límite o los lotes."
+            )
+
+    superficie_total = sum(lote.superficie_ha for lote in lotes)
+    for campania, minimo_total in minimos_por_campania.items():
+        capacidad = superficie_total * campania.slots.count()
+        if minimo_total > capacidad + 1e-9:
+            raise ValidationError(
+                f"No se puede planificar la campaña {campania.codigo}: los mínimos "
+                f"de cultivos suman {minimo_total:g} ha, pero tus lotes habilitados "
+                f"permiten como máximo {capacidad:g} ha en esa campaña."
             )
 
 
@@ -82,7 +113,7 @@ def solicitar_planificacion(actor, *, nombre):
     nombre = (nombre or "").strip()
     if not nombre or len(nombre) > 100:
         raise ValidationError("Ingrese un nombre de hasta 100 caracteres.")
-    _validar_lotes_habilitados()
+    _validar_lotes_habilitados(actor)
     with transaction.atomic():
         if connection.vendor == "postgresql":
             # Serialize admission across all web workers without locking solver jobs.

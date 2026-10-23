@@ -6,9 +6,9 @@ from core.models import Cultivo, Lote, Planificacion
 
 @login_required(login_url="login")
 def home(request):
-    total_lotes = Lote.objects.count()
+    total_lotes = Lote.objects.filter(usuario=request.user).count()
     total_cultivos = Cultivo.objects.count()
-    total_planificaciones = Planificacion.objects.count()
+    total_planificaciones = Planificacion.objects.filter(usuario=request.user).count()
 
     context = {
         "total_lotes": total_lotes,

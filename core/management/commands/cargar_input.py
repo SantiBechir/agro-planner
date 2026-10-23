@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.contrib.auth import get_user_model
 
 from core.models import CampaniaHistorica
 from core.services.input_v51 import (
@@ -27,6 +28,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("archivo", type=str, help="Ruta a Input v5.1.xlsx")
+        parser.add_argument("--usuario", help="Correo del propietario de los datos")
         parser.add_argument(
             "--validar",
             action="store_true",
@@ -54,14 +56,23 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("No se realizaron cambios en la base."))
             return
 
+        email = options.get("usuario")
+        if not email:
+            raise CommandError("Indicá --usuario con el correo de una cuenta existente.")
+        try:
+            usuario = get_user_model().objects.get(email__iexact=email.strip(), is_active=True)
+        except get_user_model().DoesNotExist as exc:
+            raise CommandError("No existe una cuenta activa con ese correo.") from exc
         try:
             with transaction.atomic():
-                stats = persist_input_v51(data)
+                stats = persist_input_v51(data, usuario)
         except Exception as exc:
             raise CommandError(
                 f"La importación fue revertida por completo: {exc}"
             ) from exc
 
         self.stdout.write(self.style.SUCCESS("Importación completada."))
+        for warning in stats.warnings:
+            self.stdout.write(self.style.WARNING(warning))
         for line in stats.lines():
             self.stdout.write(line)

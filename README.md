@@ -36,6 +36,11 @@ La [inspección de seguridad](docs/auditoria-seguridad.md) y la
 [guía de despliegue con HTTPS](docs/despliegue-seguro.md) describen las protecciones,
 los límites de la revisión y la configuración requerida antes de publicar.
 
+Los datos económicos, lotes, ambientes, historiales, límites y habilitaciones
+son privados de cada cuenta. Los cultivos, rendimientos de referencia, suelos,
+calendario y reglas del modelo siguen compartidos. La carga del Excel es
+explícita: ver [datos por usuario y puesta en marcha](docs/datos-por-usuario.md).
+
 La autenticación usa el correo electrónico como identificador. Los usuarios se
 crean explícitamente con `createsuperuser` o desde Django Admin; ninguna
 migración crea cuentas ni contiene contraseñas.
@@ -49,7 +54,6 @@ migración crea cuentas ni contiene contraseñas.
 | `DEBUG`                 | Modo debug                                          | `True` / `False`                    |
 | `ALLOWED_HOSTS`         | Hosts permitidos (separados por coma)               | `agro.example.edu.ar`               |
 | `CSRF_TRUSTED_ORIGINS`  | Orígenes HTTPS confiables para CSRF (coma separada) | `https://agro.example.edu.ar`        |
-| `INPUT_DATA_FILE`       | Ruta del Excel que se carga durante el release      | `docs/Input v5.1.xlsx`                |
 | `DATABASE_SSL_REQUIRE`  | SSL hacia Postgres en producción (default `True`)   | `False` en redes Docker internas      |
 | `SECURE_SSL_REDIRECT`   | Redirect HTTP→HTTPS en producción (default `True`)  | `True`                               |
 | `TRUST_PROXY_CLIENT_IP` | Leer X-Real-IP, solo con proxy que reemplace el header y backend privado | `True` con proxy configurado |
@@ -67,8 +71,7 @@ En desarrollo, si no configurás `DATABASE_URL`, usa SQLite automáticamente.
 ## Producción: servidor de la facultad, rama main
 
 `docker-compose.yml` levanta cuatro servicios: `db` (Postgres 16 con volumen
-persistente), `migrate` (corre `deploy_release` una vez por arranque: migra e
-importa el input de forma idempotente), `web` (gunicorn en `:8000`) y `worker`
+persistente), `migrate` (corre `deploy_release` una vez por arranque: verifica y aplica migraciones), `web` (gunicorn en `:8000`) y `worker`
 (`process_optimizations --loop`). Postgres, web y worker se reinician
 automáticamente tras un reinicio del servidor o un fallo del proceso.
 
@@ -81,6 +84,11 @@ docker compose up -d --build
 docker compose exec web python manage.py check --deploy --fail-level WARNING
 # Solo la primera vez: crear el administrador por correo.
 docker compose exec web python manage.py createsuperuser
+# Crear la cuenta destinataria con rol Editor desde /admin/.
+docker compose exec web python manage.py cargar_modelo "docs/Input v5.1.xlsx"
+# Si existen datos anteriores sin propietario, asignarlos antes de importar:
+# docker compose exec web python manage.py asignar_datos_legacy --usuario productor@ejemplo.com
+docker compose exec web python manage.py cargar_input "docs/Input v5.1.xlsx" --usuario productor@ejemplo.com
 ```
 
 El backend queda en `127.0.0.1:8000` por HTTP para el proxy del servidor.

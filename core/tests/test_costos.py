@@ -1,3 +1,4 @@
+from core.models import ConfiguracionCultivoUsuario
 from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from core.views import costo_list
@@ -27,13 +28,12 @@ class CostoListDirectTest(TestCase):
             siembra_inicio=10,
             siembra_fin=90,
         )
-        self.tipo_costo = TipoCosto.objects.create(
-            codigo="fsp",
+        self.tipo_costo = TipoCosto.objects.create(codigo="fsp",
             descripcion="Future selling price",
             unidad="USD/ton",
         )
         self.campania = Campania.objects.create(codigo="C1", orden=1)
-        self.costo = Costo.objects.create(
+        self.costo = Costo.objects.create(usuario=self.user,
             cultivo=self.cultivo,
             tipo_costo=self.tipo_costo,
             campania=self.campania,
@@ -72,7 +72,7 @@ class CostoListDirectTest(TestCase):
                 siembra_inicio=10,
                 siembra_fin=90,
             )
-            Costo.objects.create(
+            Costo.objects.create(usuario=self.user,
                 cultivo=cultivo,
                 tipo_costo=self.tipo_costo,
                 campania=self.campania,
@@ -98,7 +98,7 @@ class CostoListDirectTest(TestCase):
             siembra_inicio=1,
             siembra_fin=30,
         )
-        Costo.objects.create(
+        Costo.objects.create(usuario=self.user,
             cultivo=barbecho,
             tipo_costo=self.tipo_costo,
             campania=self.campania,
@@ -118,7 +118,7 @@ class CostoListDirectTest(TestCase):
 
     def test_rental_costs_are_rendered_in_separate_lot_table(self):
         suelo = TipoSuelo.objects.create(codigo="S1", nombre="Suelo 1")
-        lote = Lote.objects.create(
+        lote = Lote.objects.create(usuario=self.user,
             codigo="L1",
             nombre="Lote 1",
             superficie_ha=100,
@@ -126,23 +126,21 @@ class CostoListDirectTest(TestCase):
             max_cultivos_secundarios=1,
             tipo_suelo=suelo,
         )
-        costo_cultivo = TipoCosto.objects.create(
-            codigo="sc_seed",
+        costo_cultivo = TipoCosto.objects.create(codigo="sc_seed",
             descripcion="Seed cost",
             unidad="USD/ha",
         )
-        arrendamiento = TipoCosto.objects.create(
-            codigo="frc",
+        arrendamiento = TipoCosto.objects.create(codigo="frc",
             descripcion="Fixed rental cost",
             unidad="USD",
         )
-        Costo.objects.create(
+        Costo.objects.create(usuario=self.user,
             cultivo=self.cultivo,
             tipo_costo=costo_cultivo,
             campania=self.campania,
             valor=120.0,
         )
-        Costo.objects.create(
+        Costo.objects.create(usuario=self.user,
             cultivo=self.cultivo,
             tipo_costo=arrendamiento,
             campania=self.campania,
@@ -206,15 +204,15 @@ class CostoListDirectTest(TestCase):
         self.cultivo.refresh_from_db()
         self.costo.refresh_from_db()
         self.assertTrue(self.costo.configurado)
-        self.assertTrue(self.cultivo.habilitado_optimizacion)
+        self.assertTrue(ConfiguracionCultivoUsuario.objects.get(usuario=self.user, cultivo=self.cultivo).habilitado_optimizacion)
+        self.assertFalse(self.cultivo.habilitado_optimizacion)
 
     def test_sowing_components_are_editable_and_total_is_read_only(self):
         values = [10.0, 20.0, 30.0, 40.0, 50.0]
         for code, value in zip(COMPONENTES_SIEMBRA, values):
-            cost_type = TipoCosto.objects.create(
-                codigo=code, descripcion=code, unidad="USD/ha"
+            cost_type = TipoCosto.objects.create(codigo=code, descripcion=code, unidad="USD/ha"
             )
-            Costo.objects.create(
+            Costo.objects.create(usuario=self.user,
                 cultivo=self.cultivo,
                 tipo_costo=cost_type,
                 campania=self.campania,

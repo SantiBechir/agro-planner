@@ -1,3 +1,5 @@
+from .support import test_usuario
+from core.models import ConfiguracionCultivoUsuario
 from django.test import TestCase
 from core.models import Cultivo, TipoSuelo, Lote, TipoCosto, Costo, Campania, CampaniaHistorica, HistorialLoteCultivo, LimiteSuperficieCultivoCampania
 from core.services.optimization_inputs import build_pyomo_input_data
@@ -25,19 +27,24 @@ class OptimizationInputsTest(TestCase):
             habilitado_optimizacion=False,
         )
 
-        data = build_pyomo_input_data()
+        for crop in Cultivo.objects.all():
+            ConfiguracionCultivoUsuario.objects.get_or_create(
+                usuario=test_usuario(), cultivo=crop,
+                defaults={"habilitado_optimizacion": crop.habilitado_optimizacion},
+            )
+        data = build_pyomo_input_data(test_usuario())
 
         self.assertIn("HABILITADO", data["i"])
         self.assertNotIn("BORRADOR", data["i"])
 
     def test_excludes_disabled_lotes_from_all_lote_params(self):
         suelo = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
-        activo = Lote.objects.create(
+        activo = Lote.objects.create(usuario=test_usuario(),
             codigo="J1", nombre="Activo", superficie_ha=100,
             max_cultivos_principales=10, max_cultivos_secundarios=10,
             tipo_suelo=suelo, habilitado=True,
         )
-        inactivo = Lote.objects.create(
+        inactivo = Lote.objects.create(usuario=test_usuario(),
             codigo="J2", nombre="Inactivo", superficie_ha=50,
             max_cultivos_principales=10, max_cultivos_secundarios=10,
             tipo_suelo=suelo, habilitado=False,
@@ -54,7 +61,12 @@ class OptimizationInputsTest(TestCase):
             lote=inactivo, cultivo=cultivo, campania_historica=ch1
         )
 
-        data = build_pyomo_input_data()
+        for crop in Cultivo.objects.all():
+            ConfiguracionCultivoUsuario.objects.get_or_create(
+                usuario=test_usuario(), cultivo=crop,
+                defaults={"habilitado_optimizacion": crop.habilitado_optimizacion},
+            )
+        data = build_pyomo_input_data(test_usuario())
 
         self.assertIn("J1", data["j"])
         self.assertNotIn("J2", data["j"])
@@ -66,7 +78,7 @@ class OptimizationInputsTest(TestCase):
 
     def _crear_lote_cultivo(self):
         suelo = TipoSuelo.objects.create(codigo="S1", nombre="Molisol")
-        lote = Lote.objects.create(
+        lote = Lote.objects.create(usuario=test_usuario(),
             codigo="J1", nombre="Activo", superficie_ha=100,
             max_cultivos_principales=10, max_cultivos_secundarios=10,
             tipo_suelo=suelo, habilitado=True,
@@ -88,7 +100,12 @@ class OptimizationInputsTest(TestCase):
                 lote=lote, cultivo=cultivo, campania_historica=campania
             )
 
-        data = build_pyomo_input_data()
+        for crop in Cultivo.objects.all():
+            ConfiguracionCultivoUsuario.objects.get_or_create(
+                usuario=test_usuario(), cultivo=crop,
+                defaults={"habilitado_optimizacion": crop.habilitado_optimizacion},
+            )
+        data = build_pyomo_input_data(test_usuario())
 
         self.assertEqual(data["ch"], ["CH1", "CH2", "CH3"])
         self.assertEqual(data["xh_dict"][("TRIGO", "J1", "CH1")], 1)
@@ -104,7 +121,12 @@ class OptimizationInputsTest(TestCase):
             lote=lote, cultivo=cultivo, campania_historica=vieja
         )
 
-        data = build_pyomo_input_data()
+        for crop in Cultivo.objects.all():
+            ConfiguracionCultivoUsuario.objects.get_or_create(
+                usuario=test_usuario(), cultivo=crop,
+                defaults={"habilitado_optimizacion": crop.habilitado_optimizacion},
+            )
+        data = build_pyomo_input_data(test_usuario())
 
         # Stored for display…
         self.assertTrue(
@@ -128,7 +150,12 @@ class OptimizationInputsTest(TestCase):
             campania_historica=campania, presente=False,
         )
 
-        data = build_pyomo_input_data()
+        for crop in Cultivo.objects.all():
+            ConfiguracionCultivoUsuario.objects.get_or_create(
+                usuario=test_usuario(), cultivo=crop,
+                defaults={"habilitado_optimizacion": crop.habilitado_optimizacion},
+            )
+        data = build_pyomo_input_data(test_usuario())
 
         self.assertEqual(data["xh_dict"][("TRIGO", "J1", "CH2")], 0)
 
@@ -136,20 +163,24 @@ class OptimizationInputsTest(TestCase):
         _, cultivo = self._crear_lote_cultivo()
         campania = Campania.objects.create(codigo="C1", orden=1)
         for index, code in enumerate(COMPONENTES_SIEMBRA, start=1):
-            cost_type = TipoCosto.objects.create(
-                codigo=code, descripcion=code, unidad="USD/ha"
+            cost_type = TipoCosto.objects.create(codigo=code, descripcion=code, unidad="USD/ha"
             )
-            Costo.objects.create(
+            Costo.objects.create(usuario=test_usuario(),
                 cultivo=cultivo,
                 tipo_costo=cost_type,
                 campania=campania,
                 valor=index * 10,
             )
-        LimiteSuperficieCultivoCampania.objects.create(
+        LimiteSuperficieCultivoCampania.objects.create(usuario=test_usuario(),
             cultivo=cultivo, campania=campania, min_ha=15, max_ha=120
         )
 
-        data = build_pyomo_input_data()
+        for crop in Cultivo.objects.all():
+            ConfiguracionCultivoUsuario.objects.get_or_create(
+                usuario=test_usuario(), cultivo=crop,
+                defaults={"habilitado_optimizacion": crop.habilitado_optimizacion},
+            )
+        data = build_pyomo_input_data(test_usuario())
 
         self.assertEqual(data["sc_dict"][("TRIGO", "C1")], 150)
         self.assertEqual(data["minha_dict"][("TRIGO", "C1")], 15)
