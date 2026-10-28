@@ -88,6 +88,23 @@ carga no duplica registros y cualquier error revierte la importación completa.
 La asignación del legado conserva valores actuales; importar después los sustituye
 por los del Excel. En una base nueva no hace falta ejecutar la asignación del legado.
 
+## Configuración de una planificación
+
+En **Planificaciones → Nueva planificación**, elegí la cantidad de campañas
+consecutivas desde la primera disponible, los cultivos y los lotes habilitados.
+El barbecho se agrega como descanso automático. Los límites por cultivo y campaña
+se inicializan con los valores personales (0 a 500 ha si no existen) y los cambios
+se aplican únicamente a esa ejecución. Tanto lectores como editores pueden
+configurar sus propias corridas; no se guardan borradores.
+
+Al ejecutar se guarda la selección en `escenario` y una copia versionada de las
+entradas del modelo en `datos_entrada`. El worker usa esa copia, incluidos costos,
+rendimientos y antecedentes vigentes al solicitar el trabajo. La pestaña
+**Datos de ejecución** muestra campañas, cultivos, lotes y límites originales,
+incluso si la ejecución falla. Los cambios posteriores en el catálogo no alteran
+esas entradas. Las corridas antiguas sin copia muestran que los datos no están
+disponibles; los trabajos antiguos pendientes generan su copia al comenzar.
+
 ## Operación y pruebas
 
 ```powershell

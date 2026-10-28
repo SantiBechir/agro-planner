@@ -11,6 +11,7 @@ from django.db.models import Q
 
 from core.models import Campania, ConfiguracionCultivoUsuario, Costo, Cultivo, Lote, TipoCosto, TipoSuelo
 from core.services.authorization import require_authenticated, require_editor
+from core.services.orden_lotes import ordenar_por_codigo_lote
 
 # Componentes oficiales del costo de siembra desagregado
 COMPONENTES_SIEMBRA = (
@@ -118,13 +119,10 @@ def consultar_costos(usuario, *, selected_tipo="", selected_campania="", selecte
     costos = (
         Costo.objects.filter(usuario=usuario).select_related("cultivo", "tipo_costo", "campania", "lote")
         .exclude(BARBECHO_COST_Q)
-        .order_by(
-            "tipo_costo__codigo",
-            "cultivo__codigo",
-            "campania__orden",
-            "lote__codigo",
-        )
     )
+    costos = ordenar_por_codigo_lote(costos, campo="lote__codigo", antes=(
+        "tipo_costo__codigo", "cultivo__codigo", "campania__orden",
+    ))
 
     if selected_tipo:
         costos = costos.filter(tipo_costo_id=selected_tipo)

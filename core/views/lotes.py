@@ -3,14 +3,14 @@ import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db.models import Case, IntegerField, Prefetch, Value, When
-from django.db.models.functions import Cast, Substr
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
 from accounts.roles import editor_required
 from core.models import CampaniaHistorica, Cultivo, HistorialLoteCultivo, Lote, TipoSuelo
 from core.services import historial, lotes
+from core.services.orden_lotes import ordenar_por_codigo_lote
 
 
 @login_required(login_url="login")
@@ -22,21 +22,6 @@ def lote_list(
 ):
     lotes = (
         Lote.objects.filter(usuario=request.user)
-        .annotate(
-            codigo_es_numerico=Case(
-                When(codigo__regex=r"^J\d+$", then=Value(0)),
-                default=Value(1),
-                output_field=IntegerField(),
-            ),
-            codigo_orden=Case(
-                When(
-                    codigo__regex=r"^J\d+$",
-                    then=Cast(Substr("codigo", 2), IntegerField()),
-                ),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
-        )
         .select_related("tipo_suelo")
         .prefetch_related("ambientes__tipo_suelo")
         .prefetch_related(
@@ -48,8 +33,8 @@ def lote_list(
                 to_attr="historial_registros",
             )
         )
-        .order_by("-habilitado", "codigo_es_numerico", "codigo_orden", "codigo")
     )
+    lotes = ordenar_por_codigo_lote(lotes)
 
     for lote in lotes:
         # Group history by campaign: one entry per campaign holding 1-2 crops

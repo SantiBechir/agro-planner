@@ -1,0 +1,6 @@
+{% if planificacion.pk %}
+<nav aria-label="Detalle de planificación" class="mb-6 flex gap-2 border-b border-slate-200 pb-3">
+  <a href="{% url 'planificacion_status' planificacion.pk %}" hx-get="{% url 'planificacion_status' planificacion.pk %}" hx-target="#main-content" {% if not tab_datos %}aria-current="page"{% endif %} class="rounded-lg px-4 py-2 text-sm font-bold {% if not tab_datos %}bg-emerald-100 text-emerald-800{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Resultados</a>
+  <a href="{% url 'planificacion_datos' planificacion.pk %}" hx-get="{% url 'planificacion_datos' planificacion.pk %}" hx-target="#main-content" {% if tab_datos %}aria-current="page"{% endif %} class="rounded-lg px-4 py-2 text-sm font-bold {% if tab_datos %}bg-emerald-100 text-emerald-800{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Datos de ejecución</a>
+</nav>
+{% endif %}

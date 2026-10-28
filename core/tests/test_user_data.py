@@ -142,8 +142,8 @@ class UserSnapshotTest(TestCase):
         limit.max_ha = 99.75
         limit.save()
         self.client.force_login(self.one)
-        response = self.client.get(reverse("planificacion_list"))
-        self.assertContains(response, 'value="12.50"')
+        response = self.client.get(reverse("planificacion_configuracion"))
+        self.assertContains(response, 'value="12.5"')
         values = {}
         for item in LimiteSuperficieCultivoCampania.objects.filter(usuario=self.one, cultivo=limit.cultivo):
             values[f"min_{item.pk}"] = item.min_ha
