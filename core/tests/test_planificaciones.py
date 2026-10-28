@@ -12,6 +12,7 @@ from core.models import (
     Lote,
     Planificacion,
     TipoSuelo,
+    SlotSiembra,
 )
 from core.services.planificaciones import solicitar_planificacion
 from django.template.loader import render_to_string
@@ -40,9 +41,15 @@ class EjecutarOptimizacionDirectTest(TestCase):
         )
         crop = Cultivo.objects.create(codigo="TRIGO", nombre="Trigo", duracion_dias=120, siembra_inicio=1, siembra_fin=60)
         ConfiguracionCultivoUsuario.objects.create(usuario=self.user, cultivo=crop, habilitado_optimizacion=True)
+        campania = Campania.objects.create(codigo="C1", orden=1)
+        SlotSiembra.objects.create(codigo="T1", orden=1, campania=campania)
+        Cultivo.objects.create(codigo="BARBECHO", nombre="Barbecho", duracion_dias=0, siembra_inicio=0, siembra_fin=365)
+        lote = Lote.objects.get(usuario=self.user)
         request = self.factory.post(
             "/planificaciones/ejecutar/",
-            {"nombre": "Planificacion asincrona"},
+            {"nombre": "Planificacion asincrona", "cantidad_campanias": "1",
+             "cultivos": [crop.pk], "lotes": [lote.pk],
+             f"min_{crop.pk}_{campania.pk}": "0", f"max_{crop.pk}_{campania.pk}": "500"},
         )
         request.user = self.user
 
@@ -154,11 +161,13 @@ class LimitesEnPlanificacionTest(ServiceTestCase):
         self.url = reverse("planificacion_limites_update", args=[self.cultivo.pk])
         self.client.force_login(self.editor)
 
-    def test_limits_are_in_planning_and_removed_from_crop_cards(self):
+    def test_limits_are_in_configuration_and_removed_from_history_and_crop_cards(self):
         response = self.client.get(reverse("planificacion_list"))
-        self.assertContains(response, "Límites de superficie por cultivo")
-        self.assertContains(response, self.url)
-        self.assertContains(response, f'name="min_{self.limite.pk}"')
+        self.assertNotContains(response, "Límites de superficie por cultivo")
+        response = self.client.get(reverse("planificacion_configuracion"))
+        self.assertContains(response, "Límites por cultivo y campaña")
+        self.assertNotContains(response, self.url)
+        self.assertContains(response, f'name="min_{self.cultivo.pk}_{self.campania.pk}"')
         self.assertNotContains(self.client.get(reverse("cultivo_list")), "Límites a cultivar")
         self.assertNotContains(self.client.get(reverse("cultivo_list")), self.url)
 
@@ -200,8 +209,8 @@ class LimitesEnPlanificacionTest(ServiceTestCase):
     def test_reader_cannot_save_and_get_cannot_mutate(self):
         self.assertEqual(self.client.get(self.url).status_code, 405)
         self.client.force_login(self.reader)
-        response = self.client.get(reverse("planificacion_list"))
-        self.assertContains(response, "Límites de superficie por cultivo")
+        response = self.client.get(reverse("planificacion_configuracion"))
+        self.assertContains(response, "Límites por cultivo y campaña")
         self.assertNotContains(response, f'hx-post="{self.url}"')
         self.assertEqual(self.client.post(self.url, {}).status_code, 403)
         self.client.logout()

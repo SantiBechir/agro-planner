@@ -1,0 +1,76 @@
+{% load l10n %}
+<div class="max-w-7xl mx-auto space-y-6" x-data="{{ configuracion_json }}">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <p class="text-sm font-semibold text-emerald-700">Planificaciones / Nueva planificación</p>
+      <h1 class="mt-1 text-3xl font-extrabold text-[#2f5e31]">Configuración de la planificación</h1>
+      <p class="mt-2 text-sm text-slate-600">Elegí qué incluir y definí los límites de esta ejecución.</p>
+    </div>
+    <a href="{% url 'planificacion_list' %}" hx-get="{% url 'planificacion_list' %}" hx-target="#main-content" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Volver al historial</a>
+  </div>
+  {% if errores %}<div role="alert" class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><ul class="list-disc pl-5">{% for error in errores %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+  <form method="post" action="{% url 'ejecutar_optimizacion' %}" hx-post="{% url 'ejecutar_optimizacion' %}" hx-target="#main-content" hx-disabled-elt="find button[type='submit']" class="space-y-6">
+    {% csrf_token %}
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <label for="nombre" class="block text-sm font-bold text-[#2f5e31]">Nombre de la planificación</label>
+      <input id="nombre" name="nombre" required maxlength="100" value="{{ nombre }}" class="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 md:max-w-xl">
+    </div>
+    <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 class="text-lg font-bold text-[#2f5e31]">1. Campañas</h2>
+      <p class="mt-1 text-sm text-slate-600">Se incluyen campañas consecutivas desde la primera disponible.</p>
+      <label for="cantidad-campanias" class="mt-4 block text-sm font-semibold">Cantidad de campañas</label>
+      <input id="cantidad-campanias" name="cantidad_campanias" type="number" min="1" max="{{ campanias|length }}" step="1" required value="{{ cantidad }}" x-model.number="cantidad" class="mt-2 w-28 rounded-lg border border-slate-300 px-3 py-2">
+      <div class="mt-4 flex flex-wrap gap-2">
+        {% for campania in campanias %}<span x-show="cantidad > {{ forloop.counter0 }}" class="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{{ campania.codigo }}{% if campania.fecha_inicio %} · {{ campania.fecha_inicio|date:'d/m/Y' }}{% endif %}{% if campania.fecha_fin %} — {{ campania.fecha_fin|date:'d/m/Y' }}{% endif %}</span>{% empty %}<p class="text-sm text-amber-800">No hay campañas disponibles. Inicializá el modelo para continuar.</p>{% endfor %}
+      </div>
+    </section>
+    <div class="grid gap-6 lg:grid-cols-2">
+      <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-lg font-bold text-[#2f5e31]">2. Cultivos</h2><span class="text-sm text-slate-500"><span x-text="cultivos.length"></span> seleccionados</span></div>
+        <div class="my-3 flex gap-4 text-sm font-semibold text-emerald-700"><button type="button" @click="cultivos = [...todosCultivos]">Seleccionar todos</button><button type="button" @click="cultivos = []">Quitar selección</button></div>
+        <div class="max-h-64 space-y-2 overflow-y-auto">
+          {% for cultivo in cultivos %}<label class="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" name="cultivos" value="{{ cultivo.pk }}" x-model="cultivos" class="h-4 w-4 accent-emerald-700"><span class="text-sm font-semibold">{{ cultivo.nombre }}</span><span class="ml-auto text-xs text-slate-500">{{ cultivo.codigo }}</span></label>{% empty %}<p class="text-sm text-slate-500">No hay cultivos habilitados.</p>{% endfor %}
+        </div>
+        <p class="mt-4 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">El barbecho se incluye automáticamente como opción de descanso y no cuenta como cultivo seleccionado. El optimizador decide qué cultivos sembrar según los límites.</p>
+      </section>
+      <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-lg font-bold text-[#2f5e31]">3. Lotes</h2><span class="text-sm text-slate-500"><span x-text="lotes.length"></span> seleccionados</span></div>
+        <div class="my-3 flex gap-4 text-sm font-semibold text-emerald-700"><button type="button" @click="lotes = [...todosLotes]">Seleccionar todos</button><button type="button" @click="lotes = []">Quitar selección</button></div>
+        <div class="max-h-64 space-y-2 overflow-y-auto">
+          {% for lote in lotes %}<label class="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3"><input type="checkbox" name="lotes" value="{{ lote.pk }}" x-model="lotes" class="h-4 w-4 accent-emerald-700"><span class="text-sm font-semibold">{{ lote.codigo }} · {{ lote.nombre }}</span><span class="ml-auto whitespace-nowrap text-xs text-slate-500">{{ lote.superficie_ha|floatformat:2 }} ha</span></label>{% empty %}<p class="text-sm text-slate-500">No hay lotes propios habilitados.</p>{% endfor %}
+        </div>
+        <p class="mt-4 text-sm font-semibold text-emerald-800">Superficie total: <span x-text="lotes.reduce((total, id) => total + (areas[id] || 0), 0).toLocaleString('es-AR', {maximumFractionDigits: 2})"></span> ha</p>
+      </section>
+    </div>
+    <details @invalid.capture="$el.open = true" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <summary class="cursor-pointer text-lg font-bold text-[#2f5e31]">
+        <h2 class="inline">4. Límites por cultivo y campaña</h2>
+        <span class="mt-1 block text-sm font-normal text-slate-600">Se usarán los límites precargados. Abrí esta sección si necesitás ajustarlos.</span>
+      </summary>
+      <p class="mt-4 text-sm text-slate-600">Definí las hectáreas mínimas y máximas. Estos valores se guardarán únicamente para esta ejecución.</p>
+      <p x-show="!cultivos.length || cantidad < 1" class="mt-4 text-sm text-slate-500">Seleccioná cultivos y campañas para configurar sus límites.</p>
+      <div class="mt-5 space-y-4">
+        {% for fila in filas %}
+        <details x-show="cultivos.includes('{{ fila.cultivo.pk }}') && cantidad > 0" @invalid.capture="$el.open = true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <summary class="cursor-pointer font-bold text-[#2f5e31]"><h3 class="inline">{{ fila.cultivo.nombre }}</h3></summary>
+          <div class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {% for celda in fila.celdas %}
+            <fieldset x-show="cantidad > {{ celda.indice }}" :disabled="!cultivos.includes('{{ fila.cultivo.pk }}') || cantidad <= {{ celda.indice }}" class="min-w-0 rounded-lg border border-slate-200 bg-white p-3">
+              <legend class="px-1 text-sm font-semibold">{{ celda.campania.codigo }}</legend>
+              <div class="grid grid-cols-2 gap-3">
+                <label for="min-{{ celda.key }}" class="text-xs text-slate-600">Mínimo (ha)<input id="min-{{ celda.key }}" name="min_{{ celda.key }}" type="number" min="0" step="0.01" required value="{{ celda.min|unlocalize }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label>
+                <label for="max-{{ celda.key }}" class="text-xs text-slate-600">Máximo (ha)<input id="max-{{ celda.key }}" name="max_{{ celda.key }}" type="number" min="0" step="0.01" required value="{{ celda.max|unlocalize }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label>
+              </div>
+            </fieldset>
+            {% endfor %}
+          </div>
+        </details>
+        {% endfor %}
+      </div>
+    </details>
+    <section class="flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+      <div><h2 class="font-bold text-[#2f5e31]">Resumen de la ejecución</h2><p class="mt-1 text-sm text-slate-700"><span x-text="cantidad"></span> campañas · <span x-text="cultivos.length"></span> cultivos + barbecho · <span x-text="lotes.length"></span> lotes · <span x-text="lotes.reduce((total, id) => total + (areas[id] || 0), 0).toLocaleString('es-AR', {maximumFractionDigits: 2})"></span> ha</p><p class="mt-2 text-xs text-slate-600">Al ejecutar se guarda una copia de los datos utilizados.</p></div>
+      <button type="submit" :disabled="cantidad < 1 || cantidad > {{ campanias|length }} || !cultivos.length || !lotes.length" class="rounded-xl bg-[#4d8b4f] px-8 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#3d6f3f] disabled:cursor-not-allowed disabled:opacity-50">Ejecutar planificación</button>
+    </section>
+  </form>
+</div>

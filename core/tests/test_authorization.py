@@ -17,6 +17,7 @@ from core.models import (
     Planificacion,
     TipoCosto,
     TipoSuelo,
+    SlotSiembra,
 )
 
 
@@ -217,6 +218,8 @@ class RoleAuthorizationTest(TestCase):
                 self.assertEqual(self.client.get(url).status_code, 405)
 
     def test_both_roles_can_read_global_data_and_create_pending_plans(self):
+        SlotSiembra.objects.create(codigo="T1", orden=1, campania=self.campaign)
+        Cultivo.objects.create(codigo="BARBECHO", nombre="Barbecho", duracion_dias=0, siembra_inicio=0, siembra_fin=365)
         read_urls = (
             reverse("home"),
             reverse("lote_list"),
@@ -232,7 +235,9 @@ class RoleAuthorizationTest(TestCase):
                     self.assertEqual(self.client.get(url).status_code, 200)
             response = self.client.post(
                 reverse("ejecutar_optimizacion"),
-                {"nombre": f"Plan {user.functional_role}"},
+                {"nombre": f"Plan {user.functional_role}", "cantidad_campanias": "1",
+                 "cultivos": [self.crop.pk], "lotes": [Lote.objects.get(usuario=user).pk],
+                 f"min_{self.crop.pk}_{self.campaign.pk}": "0", f"max_{self.crop.pk}_{self.campaign.pk}": "500"},
             )
             self.assertEqual(response.status_code, 302)
             self.assertTrue(
@@ -265,7 +270,7 @@ class RoleAuthorizationTest(TestCase):
         reader_costs = self.client.get(reverse("costo_list")).content.decode()
         self.assertNotIn(f'name="costo_{self.cost.pk}"', reader_costs)
         self.assertNotIn("Guardar Cambios", reader_costs)
-        self.assertIn("Nueva Planificación", self.client.get(reverse("planificacion_list")).content.decode())
+        self.assertIn("Nueva planificación", self.client.get(reverse("planificacion_list")).content.decode())
 
     def test_home_shows_real_role_and_superuser_bypasses_editor_group(self):
         self.client.force_login(self.reader)
