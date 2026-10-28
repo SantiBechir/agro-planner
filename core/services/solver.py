@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db import transaction
 from core.models import Planificacion, AsignacionLoteSlot, Lote, Cultivo, SlotSiembra
 from core.services.optimization_inputs import build_pyomo_input_data
+from core.services.planificacion_escenario import congelar_entradas, restaurar_entradas
 
 
 def build_optimization_model(data):
@@ -15,6 +16,7 @@ def build_optimization_model(data):
     # ---- SETS ----
     model.j = pyo.Set(initialize=data["j"], doc='Plots')
     model.i = pyo.Set(initialize=data["i"], doc='Crops')
+    model.i_hist = pyo.Set(initialize=data.get("i_hist", data["i"]))
     model.i_ns = pyo.Set(initialize=data["i_ns"], within=model.i)
     model.i_p = pyo.Set(initialize=data["i_p"], within=model.i)
     model.i_s = pyo.Set(initialize=data["i_s"], within=model.i)
@@ -56,10 +58,10 @@ def build_optimization_model(data):
     model.setup = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["setup_dict"].get((i1, i2), 0.0))
     model.ar = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["ar_dict"].get((i1, i2), 1), mutable=True)
     model.sueloi = pyo.Param(model.i, model.s, initialize=lambda m, i, s: data["sueloi_dict"].get((i, s), 1))
-    model.xh = pyo.Param(model.i, model.j, model.ch, initialize=lambda m, i, j, ch: data["xh_dict"].get((i, j, ch), 0))
+    model.xh = pyo.Param(model.i_hist, model.j, model.ch, initialize=lambda m, i, j, ch: data["xh_dict"].get((i, j, ch), 0))
     model.alfa = pyo.Param(model.l, initialize=lambda m, l: data["alfa_dict"].get(l, 0.0))
     model.ymax = pyo.Param(model.s, model.i, initialize=lambda m, s, i: data["y_max_dict"].get((s, i), 0.0))
-    model.red = pyo.Param(model.i, model.i, initialize=lambda m, i1, i2: data["red_dict"].get((i1, i2), 0.0))
+    model.red = pyo.Param(model.i_hist, model.i, initialize=lambda m, i1, i2: data["red_dict"].get((i1, i2), 0.0))
     model.ord = pyo.Param(model.c, initialize=data["ord_dict"])
     model.lag = pyo.Param(model.l, initialize=data['lag_dict'])
 
@@ -194,7 +196,7 @@ def build_optimization_model(data):
     def sequencingNA_initial(model, i, j, c, t):
         if i not in model.i_ns:
             return pyo.Constraint.Skip
-        if c != 'C1':
+        if c != data["c"][0]:
             return pyo.Constraint.Skip
         if t not in model.tc[c]:
             return pyo.Constraint.Skip
@@ -205,16 +207,20 @@ def build_optimization_model(data):
                 + sum(sum(model.X[ip,j,tt] for ip in model.i
                           if ip != i and ip != 'BARBECHO')
                       for tt in previous_slots)
-                + sum(model.xh[ip,j,ch1] for ip in model.i
+                + sum(model.xh[ip,j,ch1] for ip in model.i_hist
                       if ip != i and ip != 'BARBECHO'))
     model.sequencingNA_initial = pyo.Constraint(model.i, model.j, model.c, model.t,
                                                  rule=sequencingNA_initial)
 
     def maincrops(model, j):
+        if not model.i_p:
+            return pyo.Constraint.Skip
         return sum(model.X[ip,j,t] for t in model.t for ip in model.i_p) <= model.max_m[j]
     model.maincrops = pyo.Constraint(model.j, rule=maincrops)
 
     def secondarycrops(model, j):
+        if not model.i_s:
+            return pyo.Constraint.Skip
         return sum(model.X[is_,j,t] for t in model.t for is_ in model.i_s) <= model.max_s[j]
     model.secondarycrops = pyo.Constraint(model.j, rule=secondarycrops)
 
@@ -231,7 +237,7 @@ def build_optimization_model(data):
         return (model.Z[i,j,t] <= 1 + sum(
             model.alfa[model.l.at(model.c.ord(model.t_to_c[t]) - model.c.ord(model.t_to_c[tb]) + 1)] * model.red[ip,i] * model.X[ip,j,tb]
                     for ip in model.i for tb in model.t if model.t.ord(tb) < model.t.ord(t))
-            + sum(model.alfa[model.l.at(model.c.ord(model.t_to_c[t]) + model.ch.ord(ch))]*model.red[ip,i]*model.xh[ip,j,ch] for ip in model.i for ch in model.ch))
+            + sum(model.alfa[model.l.at(model.c.ord(model.t_to_c[t]) + model.ch.ord(ch))]*model.red[ip,i]*model.xh[ip,j,ch] for ip in model.i_hist for ch in model.ch))
     model.history = pyo.Constraint(model.i, model.j, model.t, rule=history)
 
     def max_area_crop(model, i, c):
@@ -285,8 +291,16 @@ def run_optimization(planificacion_id):
     planificacion.save()
 
     try:
-        # 1. Obtener datos de la base de datos
-        data = build_pyomo_input_data(planificacion.usuario)
+        if planificacion.datos_entrada is None:
+            # Legacy queued jobs acquire a snapshot once, at worker admission.
+            data = build_pyomo_input_data(planificacion.usuario)
+            planificacion.datos_entrada = congelar_entradas(data, planificacion.usuario)
+            planificacion.save(update_fields=["datos_entrada"])
+        else:
+            data = restaurar_entradas(planificacion.datos_entrada)
+        etiquetas = planificacion.datos_entrada["etiquetas"]
+        identidades = {nombre: {obj["codigo"]: obj["id"] for obj in etiquetas[nombre]}
+                      for nombre in ("lotes", "cultivos", "slots")}
 
         model = build_optimization_model(data)
         tc_dict = data["tc_dict"]
@@ -319,9 +333,9 @@ def run_optimization(planificacion_id):
                 # Guardar asignaciones individuales de lotes y slots
                 for (i_code, j_code, t_code) in model.X:
                     if pyo.value(model.X[i_code, j_code, t_code]) > 0.5:
-                        lote = Lote.objects.get(codigo=j_code, usuario=planificacion.usuario)
-                        cultivo = Cultivo.objects.get(codigo=i_code)
-                        slot = SlotSiembra.objects.get(codigo=t_code)
+                        lote = Lote.objects.get(pk=identidades["lotes"][j_code], usuario=planificacion.usuario)
+                        cultivo = Cultivo.objects.get(pk=identidades["cultivos"][i_code])
+                        slot = SlotSiembra.objects.get(pk=identidades["slots"][t_code])
 
                         st_d = float(pyo.value(model.ST[j_code, t_code]))
                         ht_d = st_d + float(pyo.value(model.gt[i_code]))
@@ -339,7 +353,7 @@ def run_optimization(planificacion_id):
                             camp_code = "C1"
 
                         rendimiento_ind = float(pyo.value(model.Y[i_code, j_code, t_code]))
-                        yield_per_ha = rendimiento_ind / lote.superficie_ha
+                        yield_per_ha = rendimiento_ind / data["ha"][j_code]
                         fsp_val = pyo.value(model.fsp[i_code, camp_code])
                         ingreso_ind = fsp_val * yield_per_ha
                         costo_ind = (

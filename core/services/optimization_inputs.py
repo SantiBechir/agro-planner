@@ -7,6 +7,7 @@ from core.models import (
     HistorialLoteCultivo,
     ImpactoRotacion,
     Lote,
+    LimiteSuperficieCultivoCampania,
     NivelAntiguedad,
     RendimientoCultivoSuelo,
     SecuenciaPermitida,
@@ -16,18 +17,26 @@ from core.models import (
 )
 from core.services.limites import limites_para_usuario
 from core.services.authorization import require_authenticated
+from django.db.models import Q
+from core.services.orden_lotes import ordenar_por_codigo_lote
 
 
-def build_pyomo_input_data(usuario):
+def build_pyomo_input_data(usuario, *, escenario=None):
     require_authenticated(usuario)
     # ── Conjuntos (Sets) ──────────────────────────────────────────────
-    lotes_habilitados = Lote.objects.filter(usuario=usuario, habilitado=True)
+    lotes_habilitados = ordenar_por_codigo_lote(Lote.objects.filter(usuario=usuario, habilitado=True))
+    if escenario is not None:
+        lotes_habilitados = lotes_habilitados.filter(pk__in=escenario["lotes"])
     j = list(lotes_habilitados.values_list("codigo", flat=True))
 
     cultivos = Cultivo.objects.filter(
         configuraciones_usuario__usuario=usuario,
         configuraciones_usuario__habilitado_optimizacion=True,
     )
+    if escenario is not None:
+        cultivos = Cultivo.objects.filter(
+            Q(pk__in=escenario["cultivos"]) | Q(pk=escenario["barbecho_id"])
+        )
     i = list(cultivos.values_list("codigo", flat=True).order_by("pk"))
 
     i_p = list(
@@ -57,9 +66,14 @@ def build_pyomo_input_data(usuario):
             TipoSuelo.objects.values_list("codigo", flat=True).order_by("codigo")
         )
 
-    c = list(Campania.objects.values_list("codigo", flat=True).order_by("orden"))
+    campanias = Campania.objects.order_by("orden")
+    slots = SlotSiembra.objects.order_by("orden")
+    if escenario is not None:
+        campanias = campanias.filter(pk__in=escenario["campanias"])
+        slots = slots.filter(campania__in=campanias)
+    c = list(campanias.values_list("codigo", flat=True))
 
-    t = list(SlotSiembra.objects.values_list("codigo", flat=True).order_by("orden"))
+    t = list(slots.values_list("codigo", flat=True))
 
     # Model window: the solver consumes exactly the 3 most recent historical
     # campaigns. Stored campaigns are year-based and mapped behind the scenes
@@ -150,7 +164,7 @@ def build_pyomo_input_data(usuario):
     # model extensions but are excluded from the solver input.
     xh_dict = {}
     for obj in HistorialLoteCultivo.objects.filter(
-        lote__usuario=usuario, lote__habilitado=True
+        lote__in=lotes_habilitados
     ).select_related(
         "cultivo", "lote", "campania_historica"
     ):
@@ -183,7 +197,7 @@ def build_pyomo_input_data(usuario):
 
     # ── Relación campaña → slots ──────────────────────────────────────
     tc_dict = {}
-    for camp in Campania.objects.all().order_by("orden"):
+    for camp in campanias:
         tc_dict[camp.codigo] = list(
             camp.slots.values_list("codigo", flat=True).order_by("orden")
         )
@@ -191,15 +205,26 @@ def build_pyomo_input_data(usuario):
     # ── Orden de campañas ─────────────────────────────────────────────
     ord_dict = {
         camp.codigo: camp.orden
-        for camp in Campania.objects.all().order_by("orden")
+        for camp in campanias
     }
 
     maxha_dict = {}
     minha_dict = {}
-    for limit in limites_para_usuario(usuario).select_related("cultivo", "campania"):
+    limites = (limites_para_usuario(usuario) if escenario is None else
+               LimiteSuperficieCultivoCampania.objects.none())
+    for limit in limites.select_related("cultivo", "campania"):
         key = (limit.cultivo.codigo, limit.campania.codigo)
         maxha_dict[key] = limit.max_ha
         minha_dict[key] = limit.min_ha
+    if escenario is not None:
+        cultivo_codigos = dict(cultivos.values_list("pk", "codigo"))
+        campania_codigos = dict(campanias.values_list("pk", "codigo"))
+        for limite in escenario["limites"]:
+            key = (cultivo_codigos[limite["cultivo_id"]], campania_codigos[limite["campania_id"]])
+            minha_dict[key], maxha_dict[key] = limite["min_ha"], limite["max_ha"]
+        for camp in c:
+            key = (cultivo_codigos[escenario["barbecho_id"]], camp)
+            minha_dict[key], maxha_dict[key] = 0, sum(ha.values()) * len(tc_dict[camp])
 
     # Proporción y productividad por ambiente; lotes sin ambientes usan su suelo.
     ep_dict, py_dict = {}, {}
@@ -214,7 +239,7 @@ def build_pyomo_input_data(usuario):
             key = (lote.codigo, lote.tipo_suelo.codigo)
             ep_dict[key], py_dict[key] = 1.0, 1.0
 
-    return {
+    data = {
         "ep_dict": ep_dict,
         "py_dict": py_dict,
         "lag_dict": lag_dict,
@@ -258,6 +283,22 @@ def build_pyomo_input_data(usuario):
         "maxha_dict": maxha_dict,
         "minha_dict": minha_dict,
     }
+    # Historical crops remain available to rotation parameters, never to X.
+    data["i_hist"] = sorted({key[0] for key in xh_dict} | set(i))
+    if escenario is not None:
+        domains = {
+            "fsp_dict": [i, c], "sc_dict": [i, c], "hc_dict": [i, c],
+            "frc_dict": [i, j, c], "vr_dict": [i, j, c],
+            "cp_dict": [i, c], "cst_dict": [i, c], "clt_dict": [i, c],
+            "tf_dict": [i], "scp_dict": [i], "st_dict": [i],
+            "setup_dict": [i, i], "ar_dict": [i, i], "sueloi_dict": [i, s],
+            "red_dict": [data["i_hist"], i], "y_max_dict": [s, i],
+        }
+        for name, axes in domains.items():
+            data[name] = {key: value for key, value in data[name].items()
+                          if all(part in domain for part, domain in
+                                 zip(key if isinstance(key, tuple) else (key,), axes))}
+    return data
 
 
 def _build_costo_dict(tipo_codigo, requires_campania, requires_lote, *, usuario):
